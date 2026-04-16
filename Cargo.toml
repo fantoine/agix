@@ -1,6 +1,6 @@
 [package]
 name = "agix"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "Agent Graph IndeX — universal package manager for AI CLI tools"
 license = "MIT"
@@ -48,7 +48,7 @@ ci = "github"
 # The installers to generate for each app
 installers = ["shell", "homebrew"]
 # A GitHub repo to push Homebrew formulas to
-tap = "fantoine/fantoine"
+tap = "fantoine/homebrew-fantoine"
 # Publish jobs to run in CI
 publish-jobs = ["homebrew"]
 # Target platforms to build apps for (Rust target-triple syntax)
