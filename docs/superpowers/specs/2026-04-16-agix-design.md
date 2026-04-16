@@ -3,6 +3,8 @@
 **Date**: 2026-04-16
 **Status**: Approved
 
+> **Agix** — *Agent Graph IndeX*
+
 ## Overview
 
 Agix is a Rust CLI tool that acts as a universal package manager for AI CLI tools (Claude Code, Codex, Gemini, Opencode, etc.). It manages the installation, update, and removal of skills, agents, plugins, and other extensions across multiple AI CLIs, using a familiar package manager workflow (Agentfile, lock file, standard commands).
