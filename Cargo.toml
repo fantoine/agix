@@ -2,6 +2,10 @@
 name = "agix"
 version = "0.1.0"
 edition = "2021"
+description = "Agent Graph IndeX — universal package manager for AI CLI tools"
+license = "MIT"
+repository = "https://github.com/fantoine/agix"
+authors = ["Fabien Antoine <1149128+fantoine@users.noreply.github.com>"]
 
 [[bin]]
 name = "agix"
@@ -33,3 +37,16 @@ tempfile = "3"
 assert_cmd = "2"
 mockito = "1"
 predicates = "3"
+
+[workspace.metadata.dist]
+cargo-dist-version = "0.28.0"
+ci = ["github"]
+installers = ["shell", "homebrew"]
+tap = "fantoine/homebrew-agix"
+publish-jobs = ["homebrew"]
+targets = [
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc"
+]
