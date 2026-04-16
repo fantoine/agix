@@ -34,3 +34,29 @@ my-pkg = {{ source = "local:{}" }}
     assert_eq!(lock.packages[0].name, "my-pkg");
     assert!(!lock.packages[0].files.is_empty());
 }
+
+#[tokio::test]
+async fn install_command_from_agentfile() {
+    let dir = tempdir().unwrap();
+    let pkg_dir = tempdir().unwrap();
+    let skills = pkg_dir.path().join("skills");
+    std::fs::create_dir(&skills).unwrap();
+    std::fs::write(skills.join("skill.md"), "# skill").unwrap();
+
+    let manifest_str = format!(
+        r#"
+[agix]
+cli = ["claude-code"]
+
+[claude-code.dependencies]
+my-pkg = {{ source = "local:{}" }}
+"#,
+        pkg_dir.path().display()
+    );
+    std::fs::write(dir.path().join("Agentfile"), &manifest_str).unwrap();
+
+    let mut cmd = assert_cmd::Command::cargo_bin("agix").unwrap();
+    cmd.current_dir(dir.path()).arg("install");
+    cmd.assert().success();
+    assert!(dir.path().join("Agentfile.lock").exists());
+}

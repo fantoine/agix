@@ -8,3 +8,17 @@ pub mod outdated;
 pub mod check;
 pub mod doctor;
 pub mod export;
+
+use std::path::PathBuf;
+
+pub fn agentfile_paths(global: bool) -> anyhow::Result<(PathBuf, PathBuf, &'static str)> {
+    if global {
+        let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("no home directory"))?;
+        let dir = home.join(".agix");
+        std::fs::create_dir_all(&dir)?;
+        Ok((dir.join("Agentfile"), dir.join("Agentfile.lock"), "global"))
+    } else {
+        let dir = std::env::current_dir()?;
+        Ok((dir.join("Agentfile"), dir.join("Agentfile.lock"), "local"))
+    }
+}

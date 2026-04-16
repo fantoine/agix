@@ -183,8 +183,35 @@ impl ProjectManifest {
     }
 
     /// Serialise and write the manifest back to disk.
+    ///
+    /// Produces the canonical Agentfile format:
+    ///   [agix]
+    ///   [dependencies]
+    ///   [claude-code.dependencies]   ← per-CLI sections
     pub fn to_file(&self, path: &Path) -> crate::error::Result<()> {
-        let text = toml::to_string_pretty(self)?;
+        use toml::Value;
+
+        let mut root = toml::map::Map::new();
+
+        // [agix]
+        root.insert("agix".to_string(), Value::try_from(&self.agix)?);
+
+        // [dependencies]
+        if !self.dependencies.is_empty() {
+            root.insert("dependencies".to_string(), Value::try_from(&self.dependencies)?);
+        }
+
+        // [<cli>.dependencies]
+        for (cli, deps) in &self.cli_dependencies {
+            if deps.is_empty() {
+                continue;
+            }
+            let mut cli_table = toml::map::Map::new();
+            cli_table.insert("dependencies".to_string(), Value::try_from(deps)?);
+            root.insert(cli.clone(), Value::Table(cli_table));
+        }
+
+        let text = toml::to_string_pretty(&Value::Table(root))?;
         std::fs::write(path, text)?;
         Ok(())
     }

@@ -29,6 +29,7 @@ impl ClaudeCodeDriver {
         _scope: &Scope,
         base: &Path,
     ) -> Result<Vec<InstalledFile>> {
+        std::fs::create_dir_all(base)?;
         let pkg_path = &fetched.path;
         let mut installed: Vec<InstalledFile> = Vec::new();
 
