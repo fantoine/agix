@@ -42,7 +42,7 @@ predicates = "3"
 cargo-dist-version = "0.28.0"
 ci = ["github"]
 installers = ["shell", "homebrew"]
-tap = "fantoine/homebrew-agix"
+tap = "fantoine/fantoine"
 publish-jobs = ["homebrew"]
 targets = [
     "x86_64-apple-darwin",
