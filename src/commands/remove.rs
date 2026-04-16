@@ -1,1 +1,1 @@
-pub async fn run(name: String, global: bool) -> anyhow::Result<()> { todo!() }
+pub async fn run(_name: String, _global: bool) -> anyhow::Result<()> { todo!() }

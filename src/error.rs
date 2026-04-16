@@ -1,3 +1,7 @@
+// Error strategy:
+// - AgixError (this file): typed errors in library code (core/, sources/, drivers/, manifest/)
+// - anyhow::Result: used at the CLI surface (commands/*.rs and main.rs) for human-readable context
+
 pub type Result<T> = std::result::Result<T, AgixError>;
 
 #[derive(Debug, thiserror::Error)]
