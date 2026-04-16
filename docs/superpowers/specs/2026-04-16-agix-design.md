@@ -39,7 +39,7 @@ agix/
 ### Installation Flow
 
 ```
-Agentfile → Resolver → Sources (fetch) → Agentfile? → Driver(s) → Installer → Lock file
+Agentfile → Resolver → Sources (fetch) → package Agentfile (optional, hooks) → Driver(s) → Installer → Lock file
 ```
 
 ### CliDriver Trait
@@ -213,7 +213,7 @@ pre-uninstall = "scripts/cleanup.sh"
 | Init command | `agix init --global` | `agix init` |
 | Default for `agix add` | no | yes |
 
-Both scopes are merged at install time. Local packages take precedence over global ones on name conflict. CLIs must be declared in `[agix] cli = [...]` and be detected on the machine to receive installations. A warning is displayed for declared-but-undetected CLIs.
+The two scopes are independent: `agix install` installs from the local Agentfile, `agix install --global` from the global one. If a package name exists in both scopes, the local installation takes precedence at runtime (the CLI loads it last). CLIs must be declared in `[agix] cli = [...]` and be detected on the machine to receive installations. A warning is displayed for declared-but-undetected CLIs.
 
 ## Commands
 
@@ -231,13 +231,16 @@ agix add <source> --version "^2.0"
 agix remove <name>            # uninstall and remove from Agentfile
 agix remove <name> --global
 
-agix update                   # update all packages (respects version constraints)
-agix update <name>            # update a specific package
+agix update                   # update all local packages (respects version constraints)
+agix update --global          # update all global packages
+agix update <name>            # update a specific local package
+agix update <name> --global
 
-agix outdated                 # list packages with newer versions available
+agix outdated                 # list local packages with newer versions available
+agix outdated --global        # list global packages with newer versions available
 
-agix list                     # list installed packages (local + global)
-agix list --global
+agix list                     # list installed packages (local + global, scope indicated)
+agix list --global            # list global packages only
 ```
 
 ### Utility
