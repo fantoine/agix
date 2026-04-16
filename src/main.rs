@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use anyhow::Result;
 
 #[derive(Parser)]
-#[command(name = "agix", about = "Agent Graph IndeX \u{2014} package manager for AI CLI tools")]
+#[command(name = "agix", about = "Agent Graph IndeX \u{2014} package manager for AI CLI tools", version)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
