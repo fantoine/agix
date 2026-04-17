@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use crate::core::lock::InstalledFile;
 use crate::drivers::{CliDriver, FetchedPackage, Scope};
 use crate::error::{AgixError, Result};

@@ -1,0 +1,12 @@
+[agix]
+name = "my-package"
+version = "0.1.0"
+description = "An example Agix package"
+cli = ["claude-code"]
+
+[hooks]
+post-install = "echo 'Installation complete'"
+pre-uninstall = "echo 'Cleaning up'"
+
+[dependencies]
+shared-rules = "github:fantoine/claude-plugins"

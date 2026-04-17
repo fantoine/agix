@@ -1,0 +1,5 @@
+[agix]
+cli = ["claude-code"]
+
+[claude-code.dependencies]
+claude-plugins = "github:fantoine/claude-plugins"
