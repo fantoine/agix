@@ -2,11 +2,11 @@ use crate::manifest::agentfile::Dependency;
 
 pub async fn run(
     source: String,
-    global: bool,
+    scope: &str,
     cli_filter: Option<String>,
     version: Option<String>,
 ) -> anyhow::Result<()> {
-    let (agentfile_path, lock_path, scope) = super::agentfile_paths(global)?;
+    let (agentfile_path, lock_path, scope) = super::agentfile_paths(scope)?;
     let mut manifest = crate::manifest::agentfile::ProjectManifest::from_file(&agentfile_path)?;
 
     let name = source

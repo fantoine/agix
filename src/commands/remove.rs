@@ -1,5 +1,5 @@
-pub async fn run(name: String, global: bool) -> anyhow::Result<()> {
-    let (agentfile_path, lock_path, _scope) = super::agentfile_paths(global)?;
+pub async fn run(name: String, scope: &str) -> anyhow::Result<()> {
+    let (agentfile_path, lock_path, _scope) = super::agentfile_paths(scope)?;
     let mut manifest = crate::manifest::agentfile::ProjectManifest::from_file(&agentfile_path)?;
 
     manifest.dependencies.remove(&name);

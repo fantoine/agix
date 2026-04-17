@@ -1,12 +1,5 @@
-pub async fn run(global: bool) -> anyhow::Result<()> {
-    let lock_path = if global {
-        dirs::home_dir()
-            .ok_or_else(|| anyhow::anyhow!("no home dir"))?
-            .join(".agix")
-            .join("Agentfile.lock")
-    } else {
-        std::env::current_dir()?.join("Agentfile.lock")
-    };
+pub async fn run(scope: &str) -> anyhow::Result<()> {
+    let (_, lock_path, _) = super::agentfile_paths(scope)?;
 
     let lock = crate::core::lock::LockFile::from_file_or_default(&lock_path);
     if lock.packages.is_empty() {

@@ -1,5 +1,5 @@
-pub async fn run(name: Option<String>, global: bool) -> anyhow::Result<()> {
-    let (agentfile_path, lock_path, scope) = super::agentfile_paths(global)?;
+pub async fn run(name: Option<String>, scope: &str) -> anyhow::Result<()> {
+    let (agentfile_path, lock_path, scope) = super::agentfile_paths(scope)?;
     if !agentfile_path.exists() {
         anyhow::bail!("No Agentfile found.");
     }

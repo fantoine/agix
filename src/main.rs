@@ -1,5 +1,20 @@
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
+
+#[derive(ValueEnum, Clone, Debug)]
+enum Scope {
+    Global,
+    Local,
+}
+
+impl Scope {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Scope::Global => "global",
+            Scope::Local => "local",
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(
@@ -15,17 +30,17 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     Init {
-        #[arg(long)]
-        global: bool,
+        #[arg(long, default_value = "local")]
+        scope: Scope,
     },
     Install {
-        #[arg(long)]
-        global: bool,
+        #[arg(long, default_value = "local")]
+        scope: Scope,
     },
     Add {
         source: String,
-        #[arg(long)]
-        global: bool,
+        #[arg(long, default_value = "local")]
+        scope: Scope,
         #[arg(long)]
         cli: Option<String>,
         #[arg(long)]
@@ -33,27 +48,27 @@ enum Commands {
     },
     Remove {
         name: String,
-        #[arg(long)]
-        global: bool,
+        #[arg(long, default_value = "local")]
+        scope: Scope,
     },
     Update {
         name: Option<String>,
-        #[arg(long)]
-        global: bool,
+        #[arg(long, default_value = "local")]
+        scope: Scope,
     },
     List {
-        #[arg(long)]
-        global: bool,
+        #[arg(long, default_value = "local")]
+        scope: Scope,
     },
     Outdated {
-        #[arg(long)]
-        global: bool,
+        #[arg(long, default_value = "local")]
+        scope: Scope,
     },
     Check,
     Doctor,
     Export {
-        #[arg(long)]
-        global: bool,
+        #[arg(long, default_value = "local")]
+        scope: Scope,
         #[arg(long)]
         all: bool,
         #[arg(long)]
@@ -65,24 +80,22 @@ enum Commands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Init { global } => agix::commands::init::run(global).await,
-        Commands::Install { global } => agix::commands::install::run(global).await,
+        Commands::Init { scope } => agix::commands::init::run(scope.as_str()).await,
+        Commands::Install { scope } => agix::commands::install::run(scope.as_str()).await,
         Commands::Add {
             source,
-            global,
+            scope,
             cli,
             version,
-        } => agix::commands::add::run(source, global, cli, version).await,
-        Commands::Remove { name, global } => agix::commands::remove::run(name, global).await,
-        Commands::Update { name, global } => agix::commands::update::run(name, global).await,
-        Commands::List { global } => agix::commands::list::run(global).await,
-        Commands::Outdated { global } => agix::commands::outdated::run(global).await,
+        } => agix::commands::add::run(source, scope.as_str(), cli, version).await,
+        Commands::Remove { name, scope } => agix::commands::remove::run(name, scope.as_str()).await,
+        Commands::Update { name, scope } => agix::commands::update::run(name, scope.as_str()).await,
+        Commands::List { scope } => agix::commands::list::run(scope.as_str()).await,
+        Commands::Outdated { scope } => agix::commands::outdated::run(scope.as_str()).await,
         Commands::Check => agix::commands::check::run().await,
         Commands::Doctor => agix::commands::doctor::run().await,
-        Commands::Export {
-            global,
-            all,
-            output,
-        } => agix::commands::export::run(global, all, output).await,
+        Commands::Export { scope, all, output } => {
+            agix::commands::export::run(scope.as_str(), all, output).await
+        }
     }
 }

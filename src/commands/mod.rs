@@ -11,8 +11,8 @@ pub mod update;
 
 use std::path::PathBuf;
 
-pub fn agentfile_paths(global: bool) -> anyhow::Result<(PathBuf, PathBuf, &'static str)> {
-    if global {
+pub fn agentfile_paths(scope: &str) -> anyhow::Result<(PathBuf, PathBuf, &'static str)> {
+    if scope == "global" {
         let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("no home directory"))?;
         let dir = home.join(".agix");
         std::fs::create_dir_all(&dir)?;

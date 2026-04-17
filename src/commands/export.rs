@@ -2,13 +2,13 @@ use anyhow::Result;
 use std::io::Write;
 use std::path::Path;
 
-pub async fn run(global: bool, all: bool, output: Option<String>) -> Result<()> {
+pub async fn run(scope: &str, all: bool, output: Option<String>) -> Result<()> {
     let output_path = output.as_deref().unwrap_or("agix-export.zip");
     let file = std::fs::File::create(output_path)?;
     let mut zip = zip::ZipWriter::new(file);
     let options: zip::write::FileOptions<()> = zip::write::FileOptions::default();
 
-    if all || !global {
+    if all || scope == "local" {
         let dir = std::env::current_dir()?;
         if dir.join("Agentfile").exists() {
             add_file_to_zip(&mut zip, &dir.join("Agentfile"), "Agentfile", options)?;
@@ -24,7 +24,7 @@ pub async fn run(global: bool, all: bool, output: Option<String>) -> Result<()> 
         add_local_sources_to_zip(&mut zip, &dir, options)?;
     }
 
-    if all || global {
+    if all || scope == "global" {
         if let Some(home) = dirs::home_dir() {
             let agix_dir = home.join(".agix");
             if agix_dir.join("Agentfile").exists() {
