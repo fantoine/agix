@@ -9,4 +9,4 @@ post-install = "echo 'Installation complete'"
 pre-uninstall = "echo 'Cleaning up'"
 
 [dependencies]
-shared-rules = "github:fantoine/claude-plugins"
+claude-later = "github:fantoine/claude-later"

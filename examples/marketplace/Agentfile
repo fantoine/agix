@@ -1,0 +1,8 @@
+[agix]
+cli = ["claude-code"]
+
+[dependencies]
+claude-later = "github:fantoine/claude-later"
+
+[claude-code.dependencies]
+mcp-server-example = "claude-code:marketplace@mcp-server-example"

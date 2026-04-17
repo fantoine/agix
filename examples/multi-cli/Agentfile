@@ -2,10 +2,10 @@
 cli = ["claude-code", "codex"]
 
 [dependencies]
-shared-rules = "github:fantoine/claude-plugins"
+claude-later = "github:fantoine/claude-later"
 
 [claude-code.dependencies]
-claude-plugins = "github:fantoine/claude-plugins"
+claude-later = "github:fantoine/claude-later"
 
 [codex.dependencies]
-shared-rules = { source = "github:fantoine/claude-plugins", exclude = ["hooks"] }
+claude-later = { source = "github:fantoine/claude-later", exclude = ["hooks"] }

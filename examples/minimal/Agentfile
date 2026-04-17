@@ -2,4 +2,4 @@
 cli = ["claude-code"]
 
 [dependencies]
-claude-plugins = "github:fantoine/claude-plugins"
+claude-later = "github:fantoine/claude-later"
