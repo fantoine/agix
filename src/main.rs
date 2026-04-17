@@ -41,8 +41,8 @@ enum Commands {
         source: String,
         #[arg(long, default_value = "local")]
         scope: Scope,
-        #[arg(long)]
-        cli: Option<String>,
+        #[arg(long, num_args = 1..)]
+        cli: Vec<String>,
         #[arg(long)]
         version: Option<String>,
     },
@@ -50,6 +50,8 @@ enum Commands {
         name: String,
         #[arg(long, default_value = "local")]
         scope: Scope,
+        #[arg(long, num_args = 1..)]
+        cli: Vec<String>,
     },
     Update {
         name: Option<String>,
@@ -88,7 +90,9 @@ async fn main() -> Result<()> {
             cli,
             version,
         } => agix::commands::add::run(source, scope.as_str(), cli, version).await,
-        Commands::Remove { name, scope } => agix::commands::remove::run(name, scope.as_str()).await,
+        Commands::Remove { name, scope, cli } => {
+            agix::commands::remove::run(name, scope.as_str(), cli).await
+        }
         Commands::Update { name, scope } => agix::commands::update::run(name, scope.as_str()).await,
         Commands::List { scope } => agix::commands::list::run(scope.as_str()).await,
         Commands::Outdated { scope } => agix::commands::outdated::run(scope.as_str()).await,

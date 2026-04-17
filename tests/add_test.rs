@@ -45,3 +45,61 @@ fn add_writes_dependency_to_agentfile() {
     let content = std::fs::read_to_string(dir.path().join("Agentfile")).unwrap();
     assert!(content.contains("local:"));
 }
+
+#[test]
+fn add_shared_dependency_without_cli_flag() {
+    let dir = tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("Agentfile"),
+        "[agix]\ncli = [\"claude-code\"]\n",
+    )
+    .unwrap();
+
+    let pkg_dir = tempdir().unwrap();
+    std::fs::write(pkg_dir.path().join("skill.md"), "# skill").unwrap();
+    let source = format!("local:{}", pkg_dir.path().display());
+
+    Command::cargo_bin("agix")
+        .unwrap()
+        .current_dir(dir.path())
+        .arg("add")
+        .arg(&source)
+        .assert()
+        .success();
+
+    let content = std::fs::read_to_string(dir.path().join("Agentfile")).unwrap();
+    // Serialized as [dependencies.<name>] — check the section key appears
+    assert!(content.contains("dependencies"));
+    // Should NOT be under a CLI-specific section
+    assert!(!content.contains("claude-code.dependencies"));
+}
+
+#[test]
+fn add_multi_cli_dependency() {
+    let dir = tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("Agentfile"),
+        "[agix]\ncli = [\"claude-code\", \"codex\"]\n",
+    )
+    .unwrap();
+
+    let pkg_dir = tempdir().unwrap();
+    std::fs::write(pkg_dir.path().join("skill.md"), "# skill").unwrap();
+    let source = format!("local:{}", pkg_dir.path().display());
+
+    Command::cargo_bin("agix")
+        .unwrap()
+        .current_dir(dir.path())
+        .arg("add")
+        .arg(&source)
+        .arg("--cli")
+        .arg("claude-code")
+        .arg("--cli")
+        .arg("codex")
+        .assert()
+        .success();
+
+    let content = std::fs::read_to_string(dir.path().join("Agentfile")).unwrap();
+    assert!(content.contains("claude-code"));
+    assert!(content.contains("codex"));
+}

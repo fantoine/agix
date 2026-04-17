@@ -3,7 +3,7 @@ use crate::manifest::agentfile::Dependency;
 pub async fn run(
     source: String,
     scope: &str,
-    cli_filter: Option<String>,
+    cli_filter: Vec<String>,
     version: Option<String>,
 ) -> anyhow::Result<()> {
     let (agentfile_path, lock_path, scope) = super::agentfile_paths(scope)?;
@@ -25,14 +25,16 @@ pub async fn run(
         exclude: None,
     };
 
-    if let Some(ref cli) = cli_filter {
-        manifest
-            .cli_dependencies
-            .entry(cli.clone())
-            .or_default()
-            .insert(name.clone(), dep);
-    } else {
+    if cli_filter.is_empty() {
         manifest.dependencies.insert(name.clone(), dep);
+    } else {
+        for cli in &cli_filter {
+            manifest
+                .cli_dependencies
+                .entry(cli.clone())
+                .or_default()
+                .insert(name.clone(), dep.clone());
+        }
     }
 
     manifest.to_file(&agentfile_path)?;
