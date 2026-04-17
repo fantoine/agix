@@ -1,4 +1,4 @@
-use agix::core::lock::{LockFile, LockedPackage, InstalledFile};
+use agix::core::lock::{InstalledFile, LockFile, LockedPackage};
 use tempfile::tempdir;
 
 #[test]
@@ -15,9 +15,9 @@ fn roundtrip_lock_file() {
         version: None,
         cli: vec!["claude-code".to_string()],
         scope: "global".to_string(),
-        files: vec![
-            InstalledFile { dest: "~/.claude/skills/brainstorming".to_string() },
-        ],
+        files: vec![InstalledFile {
+            dest: "~/.claude/skills/brainstorming".to_string(),
+        }],
     });
 
     lock.to_file(&lock_path).unwrap();

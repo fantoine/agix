@@ -5,7 +5,8 @@ use tempfile::tempdir;
 fn doctor_warns_without_agentfile() {
     let dir = tempdir().unwrap();
 
-    Command::cargo_bin("agix").unwrap()
+    Command::cargo_bin("agix")
+        .unwrap()
         .args(["doctor"])
         .current_dir(&dir)
         .assert()
@@ -16,12 +17,17 @@ fn doctor_warns_without_agentfile() {
 #[test]
 fn doctor_reports_all_files_present_when_lock_empty() {
     let dir = tempdir().unwrap();
-    std::fs::write(dir.path().join("Agentfile"), r#"
+    std::fs::write(
+        dir.path().join("Agentfile"),
+        r#"
 [agix]
 cli = ["claude-code"]
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
-    Command::cargo_bin("agix").unwrap()
+    Command::cargo_bin("agix")
+        .unwrap()
         .args(["doctor"])
         .current_dir(&dir)
         .assert()
@@ -32,11 +38,17 @@ cli = ["claude-code"]
 #[test]
 fn doctor_warns_on_missing_installed_file() {
     let dir = tempdir().unwrap();
-    std::fs::write(dir.path().join("Agentfile"), r#"
+    std::fs::write(
+        dir.path().join("Agentfile"),
+        r#"
 [agix]
 cli = ["claude-code"]
-"#).unwrap();
-    std::fs::write(dir.path().join("Agentfile.lock"), r#"
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("Agentfile.lock"),
+        r#"
 [[package]]
 name = "claude-later"
 source = "github:fantoine/claude-later"
@@ -46,9 +58,12 @@ scope = "local"
 
 [[package.files]]
 dest = "/nonexistent/path/that/does/not/exist.md"
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
-    Command::cargo_bin("agix").unwrap()
+    Command::cargo_bin("agix")
+        .unwrap()
         .args(["doctor"])
         .current_dir(&dir)
         .assert()

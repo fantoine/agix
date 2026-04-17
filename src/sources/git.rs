@@ -52,7 +52,8 @@ mod tests {
         index.write().unwrap();
         let oid = index.write_tree().unwrap();
         let tree = repo.find_tree(oid).unwrap();
-        repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[]).unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
+            .unwrap();
 
         let dest = tempdir().unwrap();
         let source = GitSource::new(src.path().to_str().unwrap(), None);

@@ -39,11 +39,9 @@ impl GitHubSource {
     }
 
     pub fn parse_org_repo(s: &str) -> Result<(String, String)> {
-        let (org, repo) = s.split_once('/').ok_or_else(|| {
-            AgixError::InvalidSource(format!(
-                "expected 'org/repo', got: {s}"
-            ))
-        })?;
+        let (org, repo) = s
+            .split_once('/')
+            .ok_or_else(|| AgixError::InvalidSource(format!("expected 'org/repo', got: {s}")))?;
         Ok((org.to_owned(), repo.to_owned()))
     }
 
@@ -79,7 +77,11 @@ impl GitHubSource {
             "{}/repos/{}/{}/git/ref/heads/{}",
             self.api_base, self.org, self.repo, ref_str
         );
-        let resp = client.get(&branch_url).send().await.map_err(AgixError::Http)?;
+        let resp = client
+            .get(&branch_url)
+            .send()
+            .await
+            .map_err(AgixError::Http)?;
         if resp.status().is_success() {
             let json: serde_json::Value = resp.json().await.map_err(AgixError::Http)?;
             if let Some(sha) = json["object"]["sha"].as_str() {
@@ -188,9 +190,7 @@ mod tests {
             .mock("GET", "/repos/org/repo/git/ref/tags/v1.0.0")
             .with_status(200)
             .with_header("content-type", "application/json")
-            .with_body(
-                r#"{"object":{"sha":"abc123def456abc123def456abc123def456abc1"}}"#,
-            )
+            .with_body(r#"{"object":{"sha":"abc123def456abc123def456abc123def456abc1"}}"#)
             .create_async()
             .await;
 
@@ -212,9 +212,7 @@ mod tests {
             .mock("GET", "/repos/org/repo/git/ref/heads/main")
             .with_status(200)
             .with_header("content-type", "application/json")
-            .with_body(
-                r#"{"object":{"sha":"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"}}"#,
-            )
+            .with_body(r#"{"object":{"sha":"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"}}"#)
             .create_async()
             .await;
 

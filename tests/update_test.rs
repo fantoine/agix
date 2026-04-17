@@ -5,7 +5,8 @@ use tempfile::tempdir;
 fn update_fails_without_agentfile() {
     let dir = tempdir().unwrap();
 
-    Command::cargo_bin("agix").unwrap()
+    Command::cargo_bin("agix")
+        .unwrap()
         .args(["update"])
         .current_dir(&dir)
         .assert()
@@ -15,12 +16,17 @@ fn update_fails_without_agentfile() {
 #[test]
 fn update_succeeds_with_empty_manifest() {
     let dir = tempdir().unwrap();
-    std::fs::write(dir.path().join("Agentfile"), r#"
+    std::fs::write(
+        dir.path().join("Agentfile"),
+        r#"
 [agix]
 cli = ["claude-code"]
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
-    Command::cargo_bin("agix").unwrap()
+    Command::cargo_bin("agix")
+        .unwrap()
         .args(["update"])
         .current_dir(&dir)
         .assert()
@@ -32,7 +38,8 @@ cli = ["claude-code"]
 fn update_single_package_fails_without_agentfile() {
     let dir = tempdir().unwrap();
 
-    Command::cargo_bin("agix").unwrap()
+    Command::cargo_bin("agix")
+        .unwrap()
         .args(["update", "claude-later"])
         .current_dir(&dir)
         .assert()

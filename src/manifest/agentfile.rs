@@ -83,7 +83,11 @@ impl<'de> Deserialize<'de> for Dependency {
                 }
 
                 let source = source.ok_or_else(|| de::Error::missing_field("source"))?;
-                Ok(Dependency { source, version, exclude })
+                Ok(Dependency {
+                    source,
+                    version,
+                    exclude,
+                })
             }
         }
 
@@ -134,9 +138,9 @@ impl<'de> Deserialize<'de> for ProjectManifest {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         // Deserialise the whole document into a raw Value first.
         let raw = toml::Value::deserialize(deserializer)?;
-        let table = raw.as_table().ok_or_else(|| {
-            de::Error::custom("expected a TOML table at the document root")
-        })?;
+        let table = raw
+            .as_table()
+            .ok_or_else(|| de::Error::custom("expected a TOML table at the document root"))?;
 
         // --- [agix] section ---
         let agix: AgixSection = table
@@ -170,7 +174,11 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             }
         }
 
-        Ok(ProjectManifest { agix, dependencies, cli_dependencies })
+        Ok(ProjectManifest {
+            agix,
+            dependencies,
+            cli_dependencies,
+        })
     }
 }
 
@@ -198,7 +206,10 @@ impl ProjectManifest {
 
         // [dependencies]
         if !self.dependencies.is_empty() {
-            root.insert("dependencies".to_string(), Value::try_from(&self.dependencies)?);
+            root.insert(
+                "dependencies".to_string(),
+                Value::try_from(&self.dependencies)?,
+            );
         }
 
         // [<cli>.dependencies]
@@ -246,9 +257,9 @@ pub struct PackageManifest {
 impl<'de> Deserialize<'de> for PackageManifest {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = toml::Value::deserialize(deserializer)?;
-        let table = raw.as_table().ok_or_else(|| {
-            de::Error::custom("expected a TOML table at the document root")
-        })?;
+        let table = raw
+            .as_table()
+            .ok_or_else(|| de::Error::custom("expected a TOML table at the document root"))?;
 
         let agix: AgixSection = table
             .get("agix")
@@ -283,7 +294,12 @@ impl<'de> Deserialize<'de> for PackageManifest {
             }
         }
 
-        Ok(PackageManifest { agix, hooks, dependencies, cli_dependencies })
+        Ok(PackageManifest {
+            agix,
+            hooks,
+            dependencies,
+            cli_dependencies,
+        })
     }
 }
 

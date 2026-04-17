@@ -1,16 +1,28 @@
-pub mod github;
 pub mod git;
+pub mod github;
 pub mod local;
 
 use crate::error::{AgixError, Result};
 
 #[derive(Debug, Clone)]
 pub enum SourceSpec {
-    GitHub { org: String, repo: String, ref_str: Option<String> },
-    Git    { url: String, ref_str: Option<String> },
-    Local  { path: std::path::PathBuf },
+    GitHub {
+        org: String,
+        repo: String,
+        ref_str: Option<String>,
+    },
+    Git {
+        url: String,
+        ref_str: Option<String>,
+    },
+    Local {
+        path: std::path::PathBuf,
+    },
     // Format: "marketplace@<org/marketplace-repo>@<plugin>"
-    Marketplace { marketplace: String, plugin: String },
+    Marketplace {
+        marketplace: String,
+        plugin: String,
+    },
 }
 
 impl SourceSpec {
@@ -18,7 +30,9 @@ impl SourceSpec {
         if let Some(rest) = s.strip_prefix("github:") {
             let (path, ref_str) = split_ref(rest);
             let (org, repo) = path.split_once('/').ok_or_else(|| {
-                AgixError::InvalidSource(format!("github source must be 'github:org/repo', got: {s}"))
+                AgixError::InvalidSource(format!(
+                    "github source must be 'github:org/repo', got: {s}"
+                ))
             })?;
             return Ok(SourceSpec::GitHub {
                 org: org.to_owned(),
@@ -50,21 +64,34 @@ impl SourceSpec {
                 plugin: plugin.to_owned(),
             });
         }
-        Err(AgixError::InvalidSource(format!("unknown source scheme: {s}")))
+        Err(AgixError::InvalidSource(format!(
+            "unknown source scheme: {s}"
+        )))
     }
 
     pub fn canonical(&self) -> String {
         match self {
             SourceSpec::GitHub { org, repo, ref_str } => {
                 let base = format!("github:{org}/{repo}");
-                if let Some(r) = ref_str { format!("{base}@{r}") } else { base }
+                if let Some(r) = ref_str {
+                    format!("{base}@{r}")
+                } else {
+                    base
+                }
             }
             SourceSpec::Git { url, ref_str } => {
                 let base = format!("git:{url}");
-                if let Some(r) = ref_str { format!("{base}@{r}") } else { base }
+                if let Some(r) = ref_str {
+                    format!("{base}@{r}")
+                } else {
+                    base
+                }
             }
             SourceSpec::Local { path } => format!("local:{}", path.display()),
-            SourceSpec::Marketplace { marketplace, plugin } => {
+            SourceSpec::Marketplace {
+                marketplace,
+                plugin,
+            } => {
                 format!("marketplace:{marketplace}@{plugin}")
             }
         }
@@ -74,7 +101,7 @@ impl SourceSpec {
 fn split_ref(s: &str) -> (&str, Option<&str>) {
     match s.find('@') {
         Some(i) => (&s[..i], Some(&s[i + 1..])),
-        None    => (s, None),
+        None => (s, None),
     }
 }
 
@@ -85,7 +112,9 @@ mod tests {
     #[test]
     fn parse_github_source() {
         let spec = SourceSpec::parse("github:org/repo").unwrap();
-        assert!(matches!(spec, SourceSpec::GitHub { ref org, ref repo, ref_str: None } if org == "org" && repo == "repo"));
+        assert!(
+            matches!(spec, SourceSpec::GitHub { ref org, ref repo, ref_str: None } if org == "org" && repo == "repo")
+        );
     }
 
     #[test]
@@ -109,8 +138,10 @@ mod tests {
     #[test]
     fn parse_marketplace_source() {
         let spec = SourceSpec::parse("marketplace:fantoine/claude-plugins@roundtable").unwrap();
-        assert!(matches!(spec, SourceSpec::Marketplace { ref marketplace, ref plugin }
-            if marketplace == "fantoine/claude-plugins" && plugin == "roundtable"));
+        assert!(
+            matches!(spec, SourceSpec::Marketplace { ref marketplace, ref plugin }
+            if marketplace == "fantoine/claude-plugins" && plugin == "roundtable")
+        );
     }
 
     #[test]

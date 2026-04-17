@@ -24,7 +24,11 @@ fn init_fails_if_agentfile_exists() {
 #[test]
 fn add_writes_dependency_to_agentfile() {
     let dir = tempdir().unwrap();
-    std::fs::write(dir.path().join("Agentfile"), "[agix]\ncli = [\"claude-code\"]\n").unwrap();
+    std::fs::write(
+        dir.path().join("Agentfile"),
+        "[agix]\ncli = [\"claude-code\"]\n",
+    )
+    .unwrap();
 
     let pkg_dir = tempdir().unwrap();
     std::fs::write(pkg_dir.path().join("skill.md"), "# skill").unwrap();

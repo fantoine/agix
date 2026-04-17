@@ -1,7 +1,7 @@
-use std::path::Path;
 use crate::core::lock::InstalledFile;
 use crate::drivers::{CliDriver, FetchedPackage, Scope};
 use crate::error::{AgixError, Result};
+use std::path::Path;
 
 pub struct CodexDriver;
 
@@ -15,7 +15,9 @@ fn copy_dir_all(src: &Path, dst: &Path, installed: &mut Vec<InstalledFile>) -> R
             copy_dir_all(&src_path, &dst_path, installed)?;
         } else {
             std::fs::copy(&src_path, &dst_path)?;
-            installed.push(InstalledFile { dest: dst_path.to_string_lossy().into_owned() });
+            installed.push(InstalledFile {
+                dest: dst_path.to_string_lossy().into_owned(),
+            });
         }
     }
     Ok(())
@@ -48,7 +50,12 @@ impl CliDriver for CodexDriver {
                 .unwrap_or(false)
     }
 
-    fn install(&self, pkg_name: &str, fetched: &FetchedPackage, scope: &Scope) -> Result<Vec<InstalledFile>> {
+    fn install(
+        &self,
+        pkg_name: &str,
+        fetched: &FetchedPackage,
+        scope: &Scope,
+    ) -> Result<Vec<InstalledFile>> {
         let home = dirs::home_dir()
             .ok_or_else(|| AgixError::Other("cannot determine home directory".to_string()))?;
         let base = home.join(".codex").join("agix");
@@ -69,7 +76,12 @@ impl CliDriver for CodexDriver {
         Ok(())
     }
 
-    fn install_from_marketplace(&self, _marketplace: &str, _plugin: &str, _scope: &Scope) -> Result<(Vec<InstalledFile>, Option<String>)> {
+    fn install_from_marketplace(
+        &self,
+        _marketplace: &str,
+        _plugin: &str,
+        _scope: &Scope,
+    ) -> Result<(Vec<InstalledFile>, Option<String>)> {
         crate::output::warn("codex has no native marketplace, skipping");
         Ok((vec![], None))
     }
@@ -92,7 +104,14 @@ mod tests {
             sha: Some("abc".to_string()),
             content_hash: None,
         };
-        let files = driver.install_with_base("my-plugin", &fetched, &crate::drivers::Scope::Global, install_base.path()).unwrap();
+        let files = driver
+            .install_with_base(
+                "my-plugin",
+                &fetched,
+                &crate::drivers::Scope::Global,
+                install_base.path(),
+            )
+            .unwrap();
         assert!(!files.is_empty());
         assert!(install_base.path().join("my-plugin").exists());
     }

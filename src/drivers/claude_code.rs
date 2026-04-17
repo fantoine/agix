@@ -1,7 +1,7 @@
-use std::path::{Path, PathBuf};
 use crate::core::lock::InstalledFile;
 use crate::drivers::{CliDriver, FetchedPackage, Scope};
 use crate::error::{AgixError, Result};
+use std::path::{Path, PathBuf};
 
 pub struct ClaudeCodeDriver;
 
@@ -15,7 +15,9 @@ fn copy_dir_all(src: &Path, dst: &Path, installed: &mut Vec<InstalledFile>) -> R
             copy_dir_all(&src_path, &dst_path, installed)?;
         } else {
             std::fs::copy(&src_path, &dst_path)?;
-            installed.push(InstalledFile { dest: dst_path.to_string_lossy().into_owned() });
+            installed.push(InstalledFile {
+                dest: dst_path.to_string_lossy().into_owned(),
+            });
         }
     }
     Ok(())
@@ -59,7 +61,9 @@ impl ClaudeCodeDriver {
                         let file_name = entry.file_name();
                         let dst_path = base.join(&file_name);
                         std::fs::copy(&src_path, &dst_path)?;
-                        installed.push(InstalledFile { dest: dst_path.to_string_lossy().into_owned() });
+                        installed.push(InstalledFile {
+                            dest: dst_path.to_string_lossy().into_owned(),
+                        });
                     }
                 }
             }
@@ -67,7 +71,9 @@ impl ClaudeCodeDriver {
 
         // Run post-install hook if an Agentfile is present
         let agentfile_path = pkg_path.join("Agentfile");
-        if let Some(manifest) = crate::manifest::agentfile::PackageManifest::from_file(&agentfile_path)? {
+        if let Some(manifest) =
+            crate::manifest::agentfile::PackageManifest::from_file(&agentfile_path)?
+        {
             if let Some(hooks) = &manifest.hooks {
                 if let Some(post_install_script) = &hooks.post_install {
                     let script_path = pkg_path.join(post_install_script);
@@ -94,11 +100,17 @@ impl CliDriver for ClaudeCodeDriver {
         home_claude || which::which("claude").is_ok()
     }
 
-    fn install(&self, pkg_name: &str, fetched: &FetchedPackage, scope: &Scope) -> Result<Vec<InstalledFile>> {
+    fn install(
+        &self,
+        pkg_name: &str,
+        fetched: &FetchedPackage,
+        scope: &Scope,
+    ) -> Result<Vec<InstalledFile>> {
         let base: PathBuf = match scope {
             Scope::Global => {
-                let home = dirs::home_dir()
-                    .ok_or_else(|| AgixError::Other("cannot determine home directory".to_string()))?;
+                let home = dirs::home_dir().ok_or_else(|| {
+                    AgixError::Other("cannot determine home directory".to_string())
+                })?;
                 home.join(".claude")
             }
             Scope::Local => PathBuf::from(".claude"),
@@ -120,7 +132,12 @@ impl CliDriver for ClaudeCodeDriver {
         Ok(())
     }
 
-    fn install_from_marketplace(&self, _marketplace: &str, _plugin: &str, _scope: &Scope) -> Result<(Vec<InstalledFile>, Option<String>)> {
+    fn install_from_marketplace(
+        &self,
+        _marketplace: &str,
+        _plugin: &str,
+        _scope: &Scope,
+    ) -> Result<(Vec<InstalledFile>, Option<String>)> {
         crate::output::warn("marketplace install not yet implemented for claude-code");
         Ok((vec![], None))
     }
@@ -146,7 +163,14 @@ mod tests {
             content_hash: None,
         };
 
-        let files = driver.install_with_base("test-pkg", &fetched, &crate::drivers::Scope::Global, install_base.path()).unwrap();
+        let files = driver
+            .install_with_base(
+                "test-pkg",
+                &fetched,
+                &crate::drivers::Scope::Global,
+                install_base.path(),
+            )
+            .unwrap();
         assert_eq!(files.len(), 1);
         assert!(files[0].dest.contains("skills"));
         assert!(std::path::Path::new(&files[0].dest).exists());
@@ -158,9 +182,11 @@ mod tests {
         let file = dir.path().join("to_remove.md");
         std::fs::write(&file, "content").unwrap();
         let driver = ClaudeCodeDriver;
-        driver.uninstall(&[crate::core::lock::InstalledFile {
-            dest: file.to_str().unwrap().to_owned(),
-        }]).unwrap();
+        driver
+            .uninstall(&[crate::core::lock::InstalledFile {
+                dest: file.to_str().unwrap().to_owned(),
+            }])
+            .unwrap();
         assert!(!file.exists());
     }
 }

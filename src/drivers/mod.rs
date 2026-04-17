@@ -1,16 +1,22 @@
 pub mod claude_code;
 pub mod codex;
 
-use std::path::PathBuf;
 use crate::core::lock::InstalledFile;
 use crate::error::Result;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Scope { Global, Local }
+pub enum Scope {
+    Global,
+    Local,
+}
 
 impl Scope {
     pub fn as_str(&self) -> &str {
-        match self { Scope::Global => "global", Scope::Local => "local" }
+        match self {
+            Scope::Global => "global",
+            Scope::Local => "local",
+        }
     }
 }
 
@@ -23,9 +29,19 @@ pub struct FetchedPackage {
 pub trait CliDriver: Send + Sync {
     fn name(&self) -> &str;
     fn detect(&self) -> bool;
-    fn install(&self, pkg_name: &str, fetched: &FetchedPackage, scope: &Scope) -> Result<Vec<InstalledFile>>;
+    fn install(
+        &self,
+        pkg_name: &str,
+        fetched: &FetchedPackage,
+        scope: &Scope,
+    ) -> Result<Vec<InstalledFile>>;
     fn uninstall(&self, files: &[InstalledFile]) -> Result<()>;
-    fn install_from_marketplace(&self, marketplace: &str, plugin: &str, scope: &Scope) -> Result<(Vec<InstalledFile>, Option<String>)>;
+    fn install_from_marketplace(
+        &self,
+        marketplace: &str,
+        plugin: &str,
+        scope: &Scope,
+    ) -> Result<(Vec<InstalledFile>, Option<String>)>;
 }
 
 pub fn all_drivers() -> Vec<Box<dyn CliDriver>> {

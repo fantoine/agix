@@ -5,9 +5,7 @@ use crate::core::resolver::Resolver;
 use crate::drivers::{driver_for, FetchedPackage, Scope};
 use crate::error::Result;
 use crate::manifest::agentfile::ProjectManifest;
-use crate::sources::{
-    github::GitHubSource, git::GitSource, local::LocalSource, SourceSpec,
-};
+use crate::sources::{git::GitSource, github::GitHubSource, local::LocalSource, SourceSpec};
 
 pub struct Installer;
 
@@ -35,7 +33,11 @@ impl Installer {
             let spec = SourceSpec::parse(&dep.source)?;
 
             // Marketplace sources: delegate to each target driver (determined by dep.cli).
-            if let SourceSpec::Marketplace { marketplace, plugin } = &spec {
+            if let SourceSpec::Marketplace {
+                marketplace,
+                plugin,
+            } = &spec
+            {
                 let mut all_files: Vec<InstalledFile> = Vec::new();
                 let mut resolved_version: Option<String> = None;
                 for cli_name in &dep.cli {
@@ -54,7 +56,8 @@ impl Installer {
                                 ));
                                 continue;
                             }
-                            let (files, version) = driver.install_from_marketplace(marketplace, plugin, &scope)?;
+                            let (files, version) =
+                                driver.install_from_marketplace(marketplace, plugin, &scope)?;
                             if version.is_some() {
                                 resolved_version = version;
                             }

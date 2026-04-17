@@ -15,7 +15,7 @@ pub async fn run() -> anyhow::Result<()> {
         match crate::drivers::driver_for(cli) {
             Some(driver) if driver.detect() => crate::output::success(&format!("{cli} detected")),
             Some(_) => crate::output::warn(&format!("{cli} declared but not detected")),
-            None    => crate::output::warn(&format!("{cli} — no driver available")),
+            None => crate::output::warn(&format!("{cli} — no driver available")),
         }
     }
 

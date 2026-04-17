@@ -18,7 +18,9 @@ pub async fn run() -> anyhow::Result<()> {
         let version = manifest.agix.version.as_deref().unwrap();
         crate::output::success(&format!(
             "Agentfile valid — package {} v{} for {}",
-            name, version, manifest.agix.cli.join(", ")
+            name,
+            version,
+            manifest.agix.cli.join(", ")
         ));
     } else {
         // Project manifest: name is absent → valid as-is.

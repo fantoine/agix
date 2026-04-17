@@ -1,8 +1,12 @@
-use clap::{Parser, Subcommand};
 use anyhow::Result;
+use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "agix", about = "Agent Graph IndeX \u{2014} package manager for AI CLI tools", version)]
+#[command(
+    name = "agix",
+    about = "Agent Graph IndeX \u{2014} package manager for AI CLI tools",
+    version
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -63,13 +67,22 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::Init { global } => agix::commands::init::run(global).await,
         Commands::Install { global } => agix::commands::install::run(global).await,
-        Commands::Add { source, global, cli, version } => agix::commands::add::run(source, global, cli, version).await,
+        Commands::Add {
+            source,
+            global,
+            cli,
+            version,
+        } => agix::commands::add::run(source, global, cli, version).await,
         Commands::Remove { name, global } => agix::commands::remove::run(name, global).await,
         Commands::Update { name, global } => agix::commands::update::run(name, global).await,
         Commands::List { global } => agix::commands::list::run(global).await,
         Commands::Outdated { global } => agix::commands::outdated::run(global).await,
         Commands::Check => agix::commands::check::run().await,
         Commands::Doctor => agix::commands::doctor::run().await,
-        Commands::Export { global, all, output } => agix::commands::export::run(global, all, output).await,
+        Commands::Export {
+            global,
+            all,
+            output,
+        } => agix::commands::export::run(global, all, output).await,
     }
 }

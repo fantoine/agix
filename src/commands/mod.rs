@@ -1,13 +1,13 @@
-pub mod init;
-pub mod install;
 pub mod add;
-pub mod remove;
-pub mod update;
-pub mod list;
-pub mod outdated;
 pub mod check;
 pub mod doctor;
 pub mod export;
+pub mod init;
+pub mod install;
+pub mod list;
+pub mod outdated;
+pub mod remove;
+pub mod update;
 
 use std::path::PathBuf;
 

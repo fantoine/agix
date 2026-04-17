@@ -3,7 +3,10 @@ pub async fn run(global: bool) -> anyhow::Result<()> {
     let manifest = crate::manifest::agentfile::ProjectManifest::from_file(&agentfile_path)?;
 
     for cli in &manifest.agix.cli {
-        if crate::drivers::driver_for(cli).map(|d| d.detect()).unwrap_or(false) {
+        if crate::drivers::driver_for(cli)
+            .map(|d| d.detect())
+            .unwrap_or(false)
+        {
             // detected, fine
         } else {
             crate::output::warn(&format!("CLI '{}' not detected on this system", cli));

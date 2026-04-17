@@ -14,7 +14,12 @@ pub async fn run(global: bool, all: bool, output: Option<String>) -> Result<()> 
             add_file_to_zip(&mut zip, &dir.join("Agentfile"), "Agentfile", options)?;
         }
         if dir.join("Agentfile.lock").exists() {
-            add_file_to_zip(&mut zip, &dir.join("Agentfile.lock"), "Agentfile.lock", options)?;
+            add_file_to_zip(
+                &mut zip,
+                &dir.join("Agentfile.lock"),
+                "Agentfile.lock",
+                options,
+            )?;
         }
         add_local_sources_to_zip(&mut zip, &dir, options)?;
     }
@@ -23,7 +28,12 @@ pub async fn run(global: bool, all: bool, output: Option<String>) -> Result<()> 
         if let Some(home) = dirs::home_dir() {
             let agix_dir = home.join(".agix");
             if agix_dir.join("Agentfile").exists() {
-                add_file_to_zip(&mut zip, &agix_dir.join("Agentfile"), "global/Agentfile", options)?;
+                add_file_to_zip(
+                    &mut zip,
+                    &agix_dir.join("Agentfile"),
+                    "global/Agentfile",
+                    options,
+                )?;
             }
         }
     }
@@ -50,10 +60,17 @@ fn add_local_sources_to_zip<W: std::io::Write + std::io::Seek>(
     project_dir: &Path,
     options: zip::write::FileOptions<()>,
 ) -> anyhow::Result<()> {
-    let lock = crate::core::lock::LockFile::from_file_or_default(&project_dir.join("Agentfile.lock"));
+    let lock =
+        crate::core::lock::LockFile::from_file_or_default(&project_dir.join("Agentfile.lock"));
     for pkg in &lock.packages {
-        if let Ok(crate::sources::SourceSpec::Local { path }) = crate::sources::SourceSpec::parse(&pkg.source) {
-            let resolved = if path.is_absolute() { path } else { project_dir.join(&path) };
+        if let Ok(crate::sources::SourceSpec::Local { path }) =
+            crate::sources::SourceSpec::parse(&pkg.source)
+        {
+            let resolved = if path.is_absolute() {
+                path
+            } else {
+                project_dir.join(&path)
+            };
             if resolved.exists() {
                 for entry in walkdir::WalkDir::new(&resolved) {
                     let entry = entry?;
