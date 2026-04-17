@@ -1,11 +1,24 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::core::lock::{InstalledFile, LockFile, LockedPackage};
 use crate::core::resolver::Resolver;
-use crate::drivers::{driver_for, FetchedPackage, Scope};
-use crate::error::Result;
+use crate::drivers::{all_drivers, driver_for, FetchedPackage, Scope};
+use crate::error::{AgixError, Result};
 use crate::manifest::agentfile::ProjectManifest;
 use crate::sources::{git::GitSource, github::GitHubSource, local::LocalSource, SourceSpec};
+
+fn marketplace_base_dir(scope: &Scope, marketplace: &str) -> Result<PathBuf> {
+    let (org, repo) = marketplace.split_once('/').ok_or_else(|| {
+        AgixError::Other(format!("invalid marketplace identifier: '{marketplace}'"))
+    })?;
+    let base = match scope {
+        Scope::Global => dirs::home_dir()
+            .ok_or_else(|| AgixError::Other("cannot determine home directory".to_string()))?
+            .join(".agix"),
+        Scope::Local => std::env::current_dir()?.join(".agix"),
+    };
+    Ok(base.join("marketplaces").join(org).join(repo))
+}
 
 pub struct Installer;
 
@@ -32,45 +45,98 @@ impl Installer {
 
             let spec = SourceSpec::parse(&dep.source)?;
 
-            // Marketplace sources: delegate to each target driver (determined by dep.cli).
+            // Marketplace sources: fetch the marketplace repo once, then install the plugin.
             if let SourceSpec::Marketplace {
                 marketplace,
                 plugin,
             } = &spec
             {
+                // 1. Resolve and (if needed) fetch the marketplace repo to a permanent directory.
+                let marketplace_dir = marketplace_base_dir(&scope, marketplace)?;
+                if marketplace_dir.exists() {
+                    crate::output::success(&format!(
+                        "Marketplace {} already installed",
+                        marketplace
+                    ));
+                } else {
+                    crate::output::info(&format!("Installing marketplace {}...", marketplace));
+                    let (org, repo) = marketplace.split_once('/').unwrap();
+                    GitHubSource::new(org, repo, None)
+                        .fetch(&marketplace_dir)
+                        .await?;
+                    crate::output::success(&format!("Marketplace {} installed", marketplace));
+                }
+
+                // 2. Locate the plugin subdirectory inside the marketplace.
+                let plugin_dir = marketplace_dir.join(plugin);
+                if !plugin_dir.exists() {
+                    return Err(AgixError::Other(format!(
+                        "plugin '{}' not found in marketplace '{}'",
+                        plugin, marketplace
+                    )));
+                }
+
+                // 3. Determine which CLIs to target.
+                //    When dep.cli is empty (e.g. shared dep in a manifest with cli = []),
+                //    fall back to every installed CLI driver.
+                let target_clis: Vec<String> = if dep.cli.is_empty() {
+                    all_drivers()
+                        .into_iter()
+                        .filter(|d| d.detect())
+                        .map(|d| d.name().to_string())
+                        .collect()
+                } else {
+                    dep.cli.clone()
+                };
+
+                // 4. Install the plugin for each supported CLI.
                 let mut all_files: Vec<InstalledFile> = Vec::new();
-                let mut resolved_version: Option<String> = None;
-                for cli_name in &dep.cli {
-                    match driver_for(cli_name) {
+                for cli_name in &target_clis {
+                    let driver = match driver_for(cli_name) {
+                        Some(d) => d,
                         None => {
                             crate::output::warn(&format!(
-                                "no driver for '{}', skipping marketplace install of '{}'",
-                                cli_name, dep.name
+                                "no driver found for '{}', skipping",
+                                cli_name
                             ));
+                            continue;
                         }
-                        Some(driver) => {
-                            if !driver.detect() {
-                                crate::output::warn(&format!(
-                                    "'{}' not detected, skipping marketplace install of '{}'",
-                                    cli_name, dep.name
-                                ));
-                                continue;
-                            }
-                            let (files, version) =
-                                driver.install_from_marketplace(marketplace, plugin, &scope)?;
-                            if version.is_some() {
-                                resolved_version = version;
-                            }
-                            all_files.extend(files);
-                        }
+                    };
+                    if !driver.supports_marketplace() {
+                        crate::output::warn(&format!(
+                            "marketplace not supported for '{}', skipping",
+                            cli_name
+                        ));
+                        continue;
                     }
+                    if !driver.detect() {
+                        crate::output::warn(&format!(
+                            "'{}' not detected, skipping install of plugin '{}'",
+                            cli_name, plugin
+                        ));
+                        continue;
+                    }
+                    let fetched_plugin = FetchedPackage {
+                        path: plugin_dir.clone(),
+                        sha: None,
+                        content_hash: None,
+                    };
+                    let files = driver.install(plugin, &fetched_plugin, &scope)?;
+                    if !files.is_empty() {
+                        crate::output::success(&format!(
+                            "Plugin '{}' installed for {}",
+                            plugin, cli_name
+                        ));
+                    }
+                    all_files.extend(files);
                 }
+
                 lock.upsert(LockedPackage {
                     name: dep.name.clone(),
                     source: dep.source.clone(),
                     sha: None,
                     content_hash: None,
-                    version: resolved_version,
+                    version: None,
                     cli: dep.cli.clone(),
                     scope: scope_str.to_owned(),
                     files: all_files,

@@ -29,6 +29,7 @@ pub struct FetchedPackage {
 pub trait CliDriver: Send + Sync {
     fn name(&self) -> &str;
     fn detect(&self) -> bool;
+    fn supports_marketplace(&self) -> bool;
     fn install(
         &self,
         pkg_name: &str,
@@ -36,12 +37,6 @@ pub trait CliDriver: Send + Sync {
         scope: &Scope,
     ) -> Result<Vec<InstalledFile>>;
     fn uninstall(&self, files: &[InstalledFile]) -> Result<()>;
-    fn install_from_marketplace(
-        &self,
-        marketplace: &str,
-        plugin: &str,
-        scope: &Scope,
-    ) -> Result<(Vec<InstalledFile>, Option<String>)>;
 }
 
 pub fn all_drivers() -> Vec<Box<dyn CliDriver>> {

@@ -51,10 +51,6 @@ impl Resolver {
                 .cloned()
                 .collect();
 
-            if target_clis.is_empty() {
-                continue;
-            }
-
             let idx = resolved.len();
             resolved.push(ResolvedDep {
                 name: name.clone(),
