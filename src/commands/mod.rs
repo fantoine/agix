@@ -16,7 +16,11 @@ pub fn agentfile_paths(scope: &str) -> anyhow::Result<(PathBuf, PathBuf, &'stati
         let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("no home directory"))?;
         let dir = home.join(".agix");
         std::fs::create_dir_all(&dir)?;
-        Ok((dir.join("Agentfile"), dir.join("Agentfile.lock"), "global"))
+        let agentfile = dir.join("Agentfile");
+        if !agentfile.exists() {
+            crate::manifest::agentfile::ProjectManifest::empty(vec![]).to_file(&agentfile)?;
+        }
+        Ok((agentfile, dir.join("Agentfile.lock"), "global"))
     } else {
         let dir = std::env::current_dir()?;
         Ok((dir.join("Agentfile"), dir.join("Agentfile.lock"), "local"))
