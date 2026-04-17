@@ -62,6 +62,10 @@ impl CliDriver for CodexDriver {
         self.install_with_base(pkg_name, fetched, scope, &base)
     }
 
+    fn supports_marketplace(&self) -> bool {
+        false
+    }
+
     fn uninstall(&self, files: &[InstalledFile]) -> Result<()> {
         for f in files {
             let path = Path::new(&f.dest);
@@ -74,16 +78,6 @@ impl CliDriver for CodexDriver {
             }
         }
         Ok(())
-    }
-
-    fn install_from_marketplace(
-        &self,
-        _marketplace: &str,
-        _plugin: &str,
-        _scope: &Scope,
-    ) -> Result<(Vec<InstalledFile>, Option<String>)> {
-        crate::output::warn("codex has no native marketplace, skipping");
-        Ok((vec![], None))
     }
 }
 
