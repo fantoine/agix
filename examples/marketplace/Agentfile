@@ -5,4 +5,4 @@ cli = ["claude-code"]
 claude-later = "github:fantoine/claude-later"
 
 [claude-code.dependencies]
-mcp-server-example = "claude-code:marketplace@mcp-server-example"
+claude-roundtable = "marketplace:fantoine/claude-plugins@roundtable"

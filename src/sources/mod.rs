@@ -9,7 +9,8 @@ pub enum SourceSpec {
     GitHub { org: String, repo: String, ref_str: Option<String> },
     Git    { url: String, ref_str: Option<String> },
     Local  { path: std::path::PathBuf },
-    Marketplace { cli: String, identifier: String },
+    // Format: "marketplace@<org/marketplace-repo>@<plugin>"
+    Marketplace { marketplace: String, plugin: String },
 }
 
 impl SourceSpec {
@@ -37,16 +38,17 @@ impl SourceSpec {
                 path: std::path::PathBuf::from(path),
             });
         }
-        // Marketplace: "<cli>:marketplace@<identifier>"
-        if let Some(colon) = s.find(':') {
-            let cli = &s[..colon];
-            let rest = &s[colon + 1..];
-            if rest.starts_with("marketplace@") {
-                return Ok(SourceSpec::Marketplace {
-                    cli: cli.to_owned(),
-                    identifier: rest["marketplace@".len()..].to_owned(),
-                });
-            }
+        // Marketplace: "marketplace:<org/repo>@<plugin>"
+        if let Some(after) = s.strip_prefix("marketplace:") {
+            let (marketplace, plugin) = after.split_once('@').ok_or_else(|| {
+                AgixError::InvalidSource(format!(
+                    "marketplace source must be 'marketplace:<org/repo>@<plugin>', got: {s}"
+                ))
+            })?;
+            return Ok(SourceSpec::Marketplace {
+                marketplace: marketplace.to_owned(),
+                plugin: plugin.to_owned(),
+            });
         }
         Err(AgixError::InvalidSource(format!("unknown source scheme: {s}")))
     }
@@ -62,8 +64,8 @@ impl SourceSpec {
                 if let Some(r) = ref_str { format!("{base}@{r}") } else { base }
             }
             SourceSpec::Local { path } => format!("local:{}", path.display()),
-            SourceSpec::Marketplace { cli, identifier } => {
-                format!("{cli}:marketplace@{identifier}")
+            SourceSpec::Marketplace { marketplace, plugin } => {
+                format!("marketplace:{marketplace}@{plugin}")
             }
         }
     }
@@ -106,8 +108,9 @@ mod tests {
 
     #[test]
     fn parse_marketplace_source() {
-        let spec = SourceSpec::parse("claude:marketplace@org/plugin").unwrap();
-        assert!(matches!(spec, SourceSpec::Marketplace { ref cli, .. } if cli == "claude"));
+        let spec = SourceSpec::parse("marketplace:fantoine/claude-plugins@roundtable").unwrap();
+        assert!(matches!(spec, SourceSpec::Marketplace { ref marketplace, ref plugin }
+            if marketplace == "fantoine/claude-plugins" && plugin == "roundtable"));
     }
 
     #[test]

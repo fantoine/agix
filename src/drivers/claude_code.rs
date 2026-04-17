@@ -120,10 +120,9 @@ impl CliDriver for ClaudeCodeDriver {
         Ok(())
     }
 
-    fn install_from_marketplace(&self, _identifier: &str, _scope: &Scope) -> Result<Vec<InstalledFile>> {
-        Err(AgixError::Other(
-            "marketplace install not yet implemented for claude-code".to_string(),
-        ))
+    fn install_from_marketplace(&self, _marketplace: &str, _plugin: &str, _scope: &Scope) -> Result<(Vec<InstalledFile>, Option<String>)> {
+        crate::output::warn("marketplace install not yet implemented for claude-code");
+        Ok((vec![], None))
     }
 }
 

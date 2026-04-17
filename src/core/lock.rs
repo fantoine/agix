@@ -18,6 +18,8 @@ pub struct LockedPackage {
     pub sha: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
     pub cli: Vec<String>,
     pub scope: String,
     pub files: Vec<InstalledFile>,

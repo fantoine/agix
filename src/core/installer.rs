@@ -34,40 +34,46 @@ impl Installer {
 
             let spec = SourceSpec::parse(&dep.source)?;
 
-            // Marketplace sources are handled differently — delegate entirely to the driver.
-            if let SourceSpec::Marketplace { cli, identifier } = &spec {
-                let cli_name = cli.clone();
-                let identifier = identifier.clone();
-                match driver_for(&cli_name) {
-                    None => {
-                        crate::output::warn(&format!(
-                            "no driver found for CLI '{}', skipping marketplace install of '{}'",
-                            cli_name, dep.name
-                        ));
-                        continue;
-                    }
-                    Some(driver) => {
-                        if !driver.detect() {
+            // Marketplace sources: delegate to each target driver (determined by dep.cli).
+            if let SourceSpec::Marketplace { marketplace, plugin } = &spec {
+                let mut all_files: Vec<InstalledFile> = Vec::new();
+                let mut resolved_version: Option<String> = None;
+                for cli_name in &dep.cli {
+                    match driver_for(cli_name) {
+                        None => {
                             crate::output::warn(&format!(
-                                "CLI '{}' not detected, skipping marketplace install of '{}'",
+                                "no driver for '{}', skipping marketplace install of '{}'",
                                 cli_name, dep.name
                             ));
-                            continue;
                         }
-                        let files = driver.install_from_marketplace(&identifier, &scope)?;
-                        lock.upsert(LockedPackage {
-                            name: dep.name.clone(),
-                            source: dep.source.clone(),
-                            sha: None,
-                            content_hash: None,
-                            cli: dep.cli.clone(),
-                            scope: scope_str.to_owned(),
-                            files,
-                        });
-                        lock.to_file(lock_path)?;
-                        continue;
+                        Some(driver) => {
+                            if !driver.detect() {
+                                crate::output::warn(&format!(
+                                    "'{}' not detected, skipping marketplace install of '{}'",
+                                    cli_name, dep.name
+                                ));
+                                continue;
+                            }
+                            let (files, version) = driver.install_from_marketplace(marketplace, plugin, &scope)?;
+                            if version.is_some() {
+                                resolved_version = version;
+                            }
+                            all_files.extend(files);
+                        }
                     }
                 }
+                lock.upsert(LockedPackage {
+                    name: dep.name.clone(),
+                    source: dep.source.clone(),
+                    sha: None,
+                    content_hash: None,
+                    version: resolved_version,
+                    cli: dep.cli.clone(),
+                    scope: scope_str.to_owned(),
+                    files: all_files,
+                });
+                lock.to_file(lock_path)?;
+                continue;
             }
 
             // Fetch the package into the temp directory.
@@ -133,6 +139,7 @@ impl Installer {
                 source: dep.source.clone(),
                 sha,
                 content_hash,
+                version: None,
                 cli: dep.cli.clone(),
                 scope: scope_str.to_owned(),
                 files: all_files,

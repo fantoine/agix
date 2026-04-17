@@ -3,24 +3,30 @@ pub async fn run() -> anyhow::Result<()> {
     if !path.exists() {
         anyhow::bail!("No Agentfile found in current directory.");
     }
-    let manifest = crate::manifest::agentfile::PackageManifest::from_file(&path)?
-        .ok_or_else(|| anyhow::anyhow!("Agentfile is empty"))?;
 
-    if manifest.agix.name.is_none() {
-        anyhow::bail!("Missing [agix] name — required for a package manifest.");
-    }
-    if manifest.agix.version.is_none() {
-        anyhow::bail!("Missing [agix] version — required for a package manifest.");
-    }
+    let manifest = crate::manifest::agentfile::ProjectManifest::from_file(&path)?;
+
     if manifest.agix.cli.is_empty() {
         anyhow::bail!("Missing [agix] cli — specify at least one target CLI.");
     }
 
-    crate::output::success(&format!(
-        "Agentfile valid — {} v{} for {}",
-        manifest.agix.name.unwrap(),
-        manifest.agix.version.unwrap(),
-        manifest.agix.cli.join(", ")
-    ));
+    // Package manifest: name is present → also require version.
+    if let Some(name) = &manifest.agix.name {
+        if manifest.agix.version.is_none() {
+            anyhow::bail!("Missing [agix] version — required when [agix] name is set.");
+        }
+        let version = manifest.agix.version.as_deref().unwrap();
+        crate::output::success(&format!(
+            "Agentfile valid — package {} v{} for {}",
+            name, version, manifest.agix.cli.join(", ")
+        ));
+    } else {
+        // Project manifest: name is absent → valid as-is.
+        crate::output::success(&format!(
+            "Agentfile valid — project for {}",
+            manifest.agix.cli.join(", ")
+        ));
+    }
+
     Ok(())
 }

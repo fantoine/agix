@@ -12,6 +12,7 @@ fn roundtrip_lock_file() {
         source: "github:claude-plugins-official/superpowers".to_string(),
         sha: Some("a3f8c12d".to_string()),
         content_hash: None,
+        version: None,
         cli: vec!["claude-code".to_string()],
         scope: "global".to_string(),
         files: vec![
@@ -36,6 +37,7 @@ fn lock_file_find_package() {
         source: "github:org/rtk".to_string(),
         sha: Some("abc123".to_string()),
         content_hash: None,
+        version: None,
         cli: vec!["claude-code".to_string()],
         scope: "local".to_string(),
         files: vec![],

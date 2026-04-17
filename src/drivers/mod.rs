@@ -25,7 +25,7 @@ pub trait CliDriver: Send + Sync {
     fn detect(&self) -> bool;
     fn install(&self, pkg_name: &str, fetched: &FetchedPackage, scope: &Scope) -> Result<Vec<InstalledFile>>;
     fn uninstall(&self, files: &[InstalledFile]) -> Result<()>;
-    fn install_from_marketplace(&self, identifier: &str, scope: &Scope) -> Result<Vec<InstalledFile>>;
+    fn install_from_marketplace(&self, marketplace: &str, plugin: &str, scope: &Scope) -> Result<(Vec<InstalledFile>, Option<String>)>;
 }
 
 pub fn all_drivers() -> Vec<Box<dyn CliDriver>> {

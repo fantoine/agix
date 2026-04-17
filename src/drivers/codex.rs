@@ -69,8 +69,9 @@ impl CliDriver for CodexDriver {
         Ok(())
     }
 
-    fn install_from_marketplace(&self, _identifier: &str, _scope: &Scope) -> Result<Vec<InstalledFile>> {
-        Err(AgixError::Other("codex has no native marketplace".to_string()))
+    fn install_from_marketplace(&self, _marketplace: &str, _plugin: &str, _scope: &Scope) -> Result<(Vec<InstalledFile>, Option<String>)> {
+        crate::output::warn("codex has no native marketplace, skipping");
+        Ok((vec![], None))
     }
 }
 
