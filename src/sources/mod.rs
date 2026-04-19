@@ -77,7 +77,7 @@ impl SourceSpec {
                     std::path::Component::Normal(s) => s.to_str(),
                     _ => None,
                 })
-                .last()
+                .next_back()
                 .map(str::to_owned)
                 .ok_or_else(|| {
                     AgixError::InvalidSource(format!(
