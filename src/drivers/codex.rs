@@ -1,7 +1,7 @@
 use crate::core::lock::InstalledFile;
 use crate::drivers::{CliDriver, FetchedPackage, Scope};
 use crate::error::{AgixError, Result};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub struct CodexDriver;
 
@@ -95,6 +95,15 @@ impl CliDriver for CodexDriver {
         Err(AgixError::Unsupported(
             "codex does not support marketplaces".to_string(),
         ))
+    }
+
+    fn detect_local_config(&self, cwd: &Path) -> Option<PathBuf> {
+        let candidate = cwd.join(".codex");
+        if candidate.exists() {
+            Some(candidate)
+        } else {
+            None
+        }
     }
 }
 

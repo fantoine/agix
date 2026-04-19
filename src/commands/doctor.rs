@@ -10,13 +10,22 @@ pub async fn run() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let manifest = crate::manifest::agentfile::ProjectManifest::from_file(&agentfile_path)?;
-    for cli in &manifest.agix.cli {
-        match crate::drivers::driver_for(cli) {
-            Some(driver) if driver.detect() => crate::output::success(&format!("{cli} detected")),
-            Some(_) => crate::output::warn(&format!("{cli} declared but not detected")),
-            None => crate::output::warn(&format!("{cli} — no driver available")),
-        }
+    // Parse the Agentfile to surface any syntax errors early, even though we
+    // no longer restrict driver reporting to declared CLIs.
+    let _ = crate::manifest::agentfile::ProjectManifest::from_file(&agentfile_path)?;
+
+    crate::output::info("CLI drivers:");
+    for driver in crate::drivers::all_drivers() {
+        let global = if driver.detect() {
+            "detected"
+        } else {
+            "not detected"
+        };
+        let local = match driver.detect_local_config(&dir) {
+            Some(p) => format!("local config at {}", p.display()),
+            None => "no local config".to_string(),
+        };
+        println!("  - {}: {} | {}", driver.name(), global, local);
     }
 
     let lock = crate::core::lock::LockFile::from_file_or_default(&lock_path);

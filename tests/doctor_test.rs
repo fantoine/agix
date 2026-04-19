@@ -36,6 +36,51 @@ cli = ["claude-code"]
 }
 
 #[test]
+fn doctor_reports_local_claude_config_when_dot_claude_exists() {
+    let dir = tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("Agentfile"),
+        r#"
+[agix]
+cli = ["claude-code"]
+"#,
+    )
+    .unwrap();
+    std::fs::create_dir(dir.path().join(".claude")).unwrap();
+
+    Command::cargo_bin("agix")
+        .unwrap()
+        .args(["doctor"])
+        .current_dir(&dir)
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("local config at"));
+}
+
+#[test]
+fn doctor_reports_no_local_config_when_absent() {
+    let dir = tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("Agentfile"),
+        r#"
+[agix]
+cli = ["claude-code"]
+"#,
+    )
+    .unwrap();
+
+    Command::cargo_bin("agix")
+        .unwrap()
+        .args(["doctor"])
+        .current_dir(&dir)
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("claude-code"))
+        .stdout(predicates::str::contains("codex"))
+        .stdout(predicates::str::contains("no local config"));
+}
+
+#[test]
 fn doctor_warns_on_missing_installed_file() {
     let dir = tempdir().unwrap();
     std::fs::write(
