@@ -135,6 +135,62 @@ impl CliDriver for ClaudeCodeDriver {
     fn supports_marketplace(&self) -> bool {
         true
     }
+
+    fn install_marketplace_plugin(
+        &self,
+        marketplace: &str,
+        plugin: &str,
+        _scope: &Scope,
+    ) -> Result<Vec<InstalledFile>> {
+        use std::process::Command;
+
+        if which::which("claude").is_err() {
+            return Err(AgixError::Other(
+                "`claude` CLI not found in PATH — install Claude Code first".to_string(),
+            ));
+        }
+
+        // 1. Register the marketplace (idempotent per Claude Code docs).
+        let status = Command::new("claude")
+            .args(["plugin", "marketplace", "add", marketplace])
+            .status()
+            .map_err(|e| AgixError::Other(format!("claude plugin marketplace add failed: {e}")))?;
+        if !status.success() {
+            return Err(AgixError::Other(format!(
+                "claude plugin marketplace add {marketplace} exited with {status}"
+            )));
+        }
+
+        // 2. Install the plugin (Claude's `<plugin>@<marketplace>` syntax).
+        let plugin_ref = format!("{plugin}@{marketplace}");
+        let status = Command::new("claude")
+            .args(["plugin", "install", &plugin_ref])
+            .status()
+            .map_err(|e| AgixError::Other(format!("claude plugin install failed: {e}")))?;
+        if !status.success() {
+            return Err(AgixError::Other(format!(
+                "claude plugin install {plugin_ref} exited with {status}"
+            )));
+        }
+
+        // Claude Code manages its own files; we track only plugin identity in the lock.
+        Ok(vec![])
+    }
+
+    fn uninstall_marketplace_plugin(&self, marketplace: &str, plugin: &str) -> Result<()> {
+        use std::process::Command;
+        let plugin_ref = format!("{plugin}@{marketplace}");
+        let status = Command::new("claude")
+            .args(["plugin", "uninstall", &plugin_ref])
+            .status()
+            .map_err(|e| AgixError::Other(format!("claude plugin uninstall failed: {e}")))?;
+        if !status.success() {
+            return Err(AgixError::Other(format!(
+                "claude plugin uninstall {plugin_ref} exited with {status}"
+            )));
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

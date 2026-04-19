@@ -24,4 +24,6 @@ pub enum AgixError {
     InvalidSource(String),
     #[error("{0}")]
     Other(String),
+    #[error("Unsupported operation: {0}")]
+    Unsupported(String),
 }

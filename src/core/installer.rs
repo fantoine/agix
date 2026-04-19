@@ -1,24 +1,11 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::core::lock::{InstalledFile, LockFile, LockedPackage};
 use crate::core::resolver::Resolver;
 use crate::drivers::{all_drivers, driver_for, FetchedPackage, Scope};
-use crate::error::{AgixError, Result};
+use crate::error::Result;
 use crate::manifest::agentfile::ProjectManifest;
 use crate::sources::{git::GitSource, github::GitHubSource, local::LocalSource, SourceSpec};
-
-fn marketplace_base_dir(scope: &Scope, marketplace: &str) -> Result<PathBuf> {
-    let (org, repo) = marketplace.split_once('/').ok_or_else(|| {
-        AgixError::Other(format!("invalid marketplace identifier: '{marketplace}'"))
-    })?;
-    let base = match scope {
-        Scope::Global => dirs::home_dir()
-            .ok_or_else(|| AgixError::Other("cannot determine home directory".to_string()))?
-            .join(".agix"),
-        Scope::Local => std::env::current_dir()?.join(".agix"),
-    };
-    Ok(base.join("marketplaces").join(org).join(repo))
-}
 
 pub struct Installer;
 
@@ -45,40 +32,11 @@ impl Installer {
 
             let spec = SourceSpec::parse(&dep.source)?;
 
-            // Marketplace sources: fetch the marketplace repo once, then install the plugin.
             if let SourceSpec::Marketplace {
                 marketplace,
                 plugin,
             } = &spec
             {
-                // 1. Resolve and (if needed) fetch the marketplace repo to a permanent directory.
-                let marketplace_dir = marketplace_base_dir(&scope, marketplace)?;
-                if marketplace_dir.exists() {
-                    crate::output::success(&format!(
-                        "Marketplace {} already installed",
-                        marketplace
-                    ));
-                } else {
-                    crate::output::info(&format!("Installing marketplace {}...", marketplace));
-                    let (org, repo) = marketplace.split_once('/').unwrap();
-                    GitHubSource::new(org, repo, None)
-                        .fetch(&marketplace_dir)
-                        .await?;
-                    crate::output::success(&format!("Marketplace {} installed", marketplace));
-                }
-
-                // 2. Locate the plugin subdirectory inside the marketplace.
-                let plugin_dir = marketplace_dir.join(plugin);
-                if !plugin_dir.exists() {
-                    return Err(AgixError::Other(format!(
-                        "plugin '{}' not found in marketplace '{}'",
-                        plugin, marketplace
-                    )));
-                }
-
-                // 3. Determine which CLIs to target.
-                //    When dep.cli is empty (e.g. shared dep in a manifest with cli = []),
-                //    fall back to every installed CLI driver.
                 let target_clis: Vec<String> = if dep.cli.is_empty() {
                     all_drivers()
                         .into_iter()
@@ -89,46 +47,39 @@ impl Installer {
                     dep.cli.clone()
                 };
 
-                // 4. Install the plugin for each supported CLI.
                 let mut all_files: Vec<InstalledFile> = Vec::new();
                 for cli_name in &target_clis {
                     let driver = match driver_for(cli_name) {
                         Some(d) => d,
                         None => {
-                            crate::output::warn(&format!(
-                                "no driver found for '{}', skipping",
-                                cli_name
-                            ));
+                            crate::output::warn(&format!("no driver for '{cli_name}', skipping"));
                             continue;
                         }
                     };
                     if !driver.supports_marketplace() {
                         crate::output::warn(&format!(
-                            "marketplace not supported for '{}', skipping",
-                            cli_name
+                            "marketplace not supported for '{cli_name}', skipping"
                         ));
                         continue;
                     }
                     if !driver.detect() {
-                        crate::output::warn(&format!(
-                            "'{}' not detected, skipping install of plugin '{}'",
-                            cli_name, plugin
-                        ));
+                        crate::output::warn(&format!("'{cli_name}' not detected, skipping"));
                         continue;
                     }
-                    let fetched_plugin = FetchedPackage {
-                        path: plugin_dir.clone(),
-                        sha: None,
-                        content_hash: None,
-                    };
-                    let files = driver.install(plugin, &fetched_plugin, &scope)?;
-                    if !files.is_empty() {
-                        crate::output::success(&format!(
-                            "Plugin '{}' installed for {}",
-                            plugin, cli_name
-                        ));
+                    crate::output::info(&format!(
+                        "Installing {plugin} from marketplace {marketplace} via {cli_name}..."
+                    ));
+                    match driver.install_marketplace_plugin(marketplace, plugin, &scope) {
+                        Ok(files) => {
+                            crate::output::success(&format!(
+                                "Plugin '{plugin}' installed for {cli_name}"
+                            ));
+                            all_files.extend(files);
+                        }
+                        Err(e) => {
+                            crate::output::warn(&format!("install failed for {cli_name}: {e}"));
+                        }
                     }
-                    all_files.extend(files);
                 }
 
                 lock.upsert(LockedPackage {
@@ -230,6 +181,7 @@ impl Installer {
             }
         };
 
+        let spec = SourceSpec::parse(&pkg.source)?;
         let cli_names = pkg.cli.clone();
         let files = pkg.files.clone();
 
@@ -244,7 +196,19 @@ impl Installer {
                     continue;
                 }
             };
-            driver.uninstall(&files)?;
+            match &spec {
+                SourceSpec::Marketplace {
+                    marketplace,
+                    plugin,
+                } => {
+                    if let Err(e) = driver.uninstall_marketplace_plugin(marketplace, plugin) {
+                        crate::output::warn(&format!(
+                            "marketplace uninstall failed for {cli_name}: {e}"
+                        ));
+                    }
+                }
+                _ => driver.uninstall(&files)?,
+            }
         }
 
         lock.remove(name);
