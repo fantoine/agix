@@ -69,6 +69,35 @@ impl SourceSpec {
         )))
     }
 
+    pub fn suggested_name(&self) -> Result<String> {
+        match self {
+            SourceSpec::Local { path } => path
+                .components()
+                .filter_map(|c| match c {
+                    std::path::Component::Normal(s) => s.to_str(),
+                    _ => None,
+                })
+                .last()
+                .map(str::to_owned)
+                .ok_or_else(|| {
+                    AgixError::InvalidSource(format!(
+                        "cannot derive name from path {}",
+                        path.display()
+                    ))
+                }),
+            SourceSpec::GitHub { repo, .. } => Ok(repo.clone()),
+            SourceSpec::Git { url, ref_str: _ } => {
+                let last = url
+                    .trim_end_matches('/')
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or(url);
+                Ok(last.trim_end_matches(".git").to_owned())
+            }
+            SourceSpec::Marketplace { plugin, .. } => Ok(plugin.clone()),
+        }
+    }
+
     pub fn canonical(&self) -> String {
         match self {
             SourceSpec::GitHub { org, repo, ref_str } => {
@@ -147,5 +176,45 @@ mod tests {
     #[test]
     fn parse_invalid_source() {
         assert!(SourceSpec::parse("invalid").is_err());
+    }
+
+    #[test]
+    fn local_suggested_name_is_last_path_component() {
+        let spec = SourceSpec::Local { path: "/tmp/foo/my-pkg".into() };
+        assert_eq!(spec.suggested_name().unwrap(), "my-pkg");
+    }
+
+    #[test]
+    fn local_suggested_name_strips_trailing_slash() {
+        let spec = SourceSpec::Local { path: "/tmp/foo/my-pkg/".into() };
+        assert_eq!(spec.suggested_name().unwrap(), "my-pkg");
+    }
+
+    #[test]
+    fn github_suggested_name_is_repo() {
+        let spec = SourceSpec::GitHub {
+            org: "fantoine".into(),
+            repo: "claude-later".into(),
+            ref_str: None,
+        };
+        assert_eq!(spec.suggested_name().unwrap(), "claude-later");
+    }
+
+    #[test]
+    fn git_suggested_name_strips_dot_git() {
+        let spec = SourceSpec::Git {
+            url: "https://example.com/foo.git".into(),
+            ref_str: None,
+        };
+        assert_eq!(spec.suggested_name().unwrap(), "foo");
+    }
+
+    #[test]
+    fn marketplace_suggested_name_is_plugin() {
+        let spec = SourceSpec::Marketplace {
+            marketplace: "fantoine/claude-plugins".into(),
+            plugin: "roundtable".into(),
+        };
+        assert_eq!(spec.suggested_name().unwrap(), "roundtable");
     }
 }

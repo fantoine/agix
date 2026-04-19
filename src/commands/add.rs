@@ -9,15 +9,8 @@ pub async fn run(
     let (agentfile_path, lock_path, scope) = super::agentfile_paths(scope)?;
     let mut manifest = crate::manifest::agentfile::ProjectManifest::from_file(&agentfile_path)?;
 
-    let name = source
-        .trim_end_matches('/')
-        .rsplit(&['/', ':'][..])
-        .next()
-        .unwrap_or(&source)
-        .split('@')
-        .next()
-        .unwrap_or(&source)
-        .to_owned();
+    let spec = crate::sources::SourceSpec::parse(&source)?;
+    let name = spec.suggested_name()?;
 
     let dep = Dependency {
         source: source.clone(),
