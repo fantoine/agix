@@ -191,6 +191,15 @@ impl CliDriver for ClaudeCodeDriver {
         }
         Ok(())
     }
+
+    fn detect_local_config(&self, cwd: &Path) -> Option<PathBuf> {
+        let candidate = cwd.join(".claude");
+        if candidate.exists() {
+            Some(candidate)
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]

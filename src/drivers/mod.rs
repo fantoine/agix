@@ -49,6 +49,9 @@ pub trait CliDriver: Send + Sync {
 
     /// Uninstall a marketplace-installed plugin via the CLI.
     fn uninstall_marketplace_plugin(&self, marketplace: &str, plugin: &str) -> Result<()>;
+
+    /// Return Some(path) if this CLI has project-level config in the given cwd.
+    fn detect_local_config(&self, cwd: &std::path::Path) -> Option<std::path::PathBuf>;
 }
 
 pub fn all_drivers() -> Vec<Box<dyn CliDriver>> {
