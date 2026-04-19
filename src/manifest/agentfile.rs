@@ -190,13 +190,17 @@ impl ProjectManifest {
         Ok(manifest)
     }
 
-    /// Serialise and write the manifest back to disk.
+    /// Serialise the manifest to its canonical Agentfile TOML representation.
     ///
     /// Produces the canonical Agentfile format:
     ///   [agix]
     ///   [dependencies]
     ///   [claude-code.dependencies]   ← per-CLI sections
-    pub fn to_file(&self, path: &Path) -> crate::error::Result<()> {
+    ///
+    /// This is the string that [`ProjectManifest::to_file`] writes to disk, and
+    /// is also the shape that the custom [`Deserialize`] impl expects when
+    /// reading the file back — so the output is guaranteed to roundtrip.
+    pub fn to_toml_string(&self) -> crate::error::Result<String> {
         use toml::Value;
 
         let mut root = toml::map::Map::new();
@@ -222,7 +226,13 @@ impl ProjectManifest {
             root.insert(cli.clone(), Value::Table(cli_table));
         }
 
-        let text = toml::to_string_pretty(&Value::Table(root))?;
+        Ok(toml::to_string_pretty(&Value::Table(root))?)
+    }
+
+    /// Serialise and write the manifest back to disk using the canonical
+    /// Agentfile format (see [`ProjectManifest::to_toml_string`]).
+    pub fn to_file(&self, path: &Path) -> crate::error::Result<()> {
+        let text = self.to_toml_string()?;
         std::fs::write(path, text)?;
         Ok(())
     }
