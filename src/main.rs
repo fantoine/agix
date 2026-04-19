@@ -32,6 +32,12 @@ enum Commands {
     Init {
         #[arg(long, default_value = "local")]
         scope: Scope,
+        /// Pre-select CLIs (skips the interactive menu). Repeatable.
+        #[arg(long, num_args = 1..)]
+        cli: Vec<String>,
+        /// Skip the interactive menu entirely.
+        #[arg(long)]
+        no_interactive: bool,
     },
     Install {
         #[arg(long, default_value = "local")]
@@ -85,7 +91,11 @@ enum Commands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Init { scope } => agix::commands::init::run(scope.as_str()).await,
+        Commands::Init {
+            scope,
+            cli,
+            no_interactive,
+        } => agix::commands::init::run(scope.as_str(), cli, no_interactive).await,
         Commands::Install { scope } => agix::commands::install::run(scope.as_str()).await,
         Commands::Add {
             source_type,

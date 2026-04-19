@@ -10,6 +10,7 @@ fn global_scope_auto_inits_agentfile_if_missing() {
     Command::cargo_bin("agix")
         .unwrap()
         .env("HOME", fake_home.path())
+        .env("AGIX_NO_INTERACTIVE", "1")
         .arg("add")
         .arg("local")
         .arg(pkg_dir.path())
@@ -27,7 +28,7 @@ fn init_creates_agentfile() {
 
     Command::cargo_bin("agix")
         .unwrap()
-        .args(["init"])
+        .args(["init", "--no-interactive"])
         .current_dir(&dir)
         .assert()
         .success()
@@ -43,7 +44,7 @@ fn init_fails_if_already_initialized() {
 
     Command::cargo_bin("agix")
         .unwrap()
-        .args(["init"])
+        .args(["init", "--no-interactive"])
         .current_dir(&dir)
         .assert()
         .failure()
