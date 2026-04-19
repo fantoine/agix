@@ -1,11 +1,23 @@
 use crate::manifest::agentfile::Dependency;
 
+const VALID_SOURCE_TYPES: &[&str] = &["local", "github", "git", "marketplace"];
+
 pub async fn run(
-    source: String,
+    source_type: String,
+    source_value: String,
     scope: &str,
     cli_filter: Vec<String>,
     version: Option<String>,
 ) -> anyhow::Result<()> {
+    if !VALID_SOURCE_TYPES.contains(&source_type.as_str()) {
+        anyhow::bail!(
+            "unknown source type '{}' — expected one of: {}",
+            source_type,
+            VALID_SOURCE_TYPES.join(", ")
+        );
+    }
+    let source = format!("{}:{}", source_type, source_value);
+
     let (agentfile_path, lock_path, scope) = super::agentfile_paths(scope)?;
     let mut manifest = crate::manifest::agentfile::ProjectManifest::from_file(&agentfile_path)?;
 
