@@ -87,11 +87,7 @@ impl SourceSpec {
                 }),
             SourceSpec::GitHub { repo, .. } => Ok(repo.clone()),
             SourceSpec::Git { url, ref_str: _ } => {
-                let last = url
-                    .trim_end_matches('/')
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or(url);
+                let last = url.trim_end_matches('/').rsplit('/').next().unwrap_or(url);
                 Ok(last.trim_end_matches(".git").to_owned())
             }
             SourceSpec::Marketplace { plugin, .. } => Ok(plugin.clone()),
@@ -180,13 +176,17 @@ mod tests {
 
     #[test]
     fn local_suggested_name_is_last_path_component() {
-        let spec = SourceSpec::Local { path: "/tmp/foo/my-pkg".into() };
+        let spec = SourceSpec::Local {
+            path: "/tmp/foo/my-pkg".into(),
+        };
         assert_eq!(spec.suggested_name().unwrap(), "my-pkg");
     }
 
     #[test]
     fn local_suggested_name_strips_trailing_slash() {
-        let spec = SourceSpec::Local { path: "/tmp/foo/my-pkg/".into() };
+        let spec = SourceSpec::Local {
+            path: "/tmp/foo/my-pkg/".into(),
+        };
         assert_eq!(spec.suggested_name().unwrap(), "my-pkg");
     }
 

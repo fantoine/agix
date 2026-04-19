@@ -125,7 +125,10 @@ fn add_local_with_separate_type_and_value() {
         .success();
 
     let content = std::fs::read_to_string(dir.path().join("Agentfile")).unwrap();
-    assert!(content.contains("local:"), "source should be stored as local:<path>");
+    assert!(
+        content.contains("local:"),
+        "source should be stored as local:<path>"
+    );
 }
 
 #[test]

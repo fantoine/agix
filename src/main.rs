@@ -93,7 +93,9 @@ async fn main() -> Result<()> {
             scope,
             cli,
             version,
-        } => agix::commands::add::run(source_type, source_value, scope.as_str(), cli, version).await,
+        } => {
+            agix::commands::add::run(source_type, source_value, scope.as_str(), cli, version).await
+        }
         Commands::Remove { name, scope, cli } => {
             agix::commands::remove::run(name, scope.as_str(), cli).await
         }
