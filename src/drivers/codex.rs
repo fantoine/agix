@@ -79,6 +79,23 @@ impl CliDriver for CodexDriver {
         }
         Ok(())
     }
+
+    fn install_marketplace_plugin(
+        &self,
+        _marketplace: &str,
+        _plugin: &str,
+        _scope: &Scope,
+    ) -> Result<Vec<InstalledFile>> {
+        Err(AgixError::Unsupported(
+            "codex does not support marketplaces".to_string(),
+        ))
+    }
+
+    fn uninstall_marketplace_plugin(&self, _marketplace: &str, _plugin: &str) -> Result<()> {
+        Err(AgixError::Unsupported(
+            "codex does not support marketplaces".to_string(),
+        ))
+    }
 }
 
 #[cfg(test)]

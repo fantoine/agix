@@ -37,6 +37,18 @@ pub trait CliDriver: Send + Sync {
         scope: &Scope,
     ) -> Result<Vec<InstalledFile>>;
     fn uninstall(&self, files: &[InstalledFile]) -> Result<()>;
+
+    /// Install a plugin via the CLI's native marketplace mechanism.
+    /// Drivers that don't support marketplaces return `AgixError::Unsupported`.
+    fn install_marketplace_plugin(
+        &self,
+        marketplace: &str,
+        plugin: &str,
+        scope: &Scope,
+    ) -> Result<Vec<InstalledFile>>;
+
+    /// Uninstall a marketplace-installed plugin via the CLI.
+    fn uninstall_marketplace_plugin(&self, marketplace: &str, plugin: &str) -> Result<()>;
 }
 
 pub fn all_drivers() -> Vec<Box<dyn CliDriver>> {
