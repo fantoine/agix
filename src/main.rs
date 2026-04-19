@@ -38,7 +38,10 @@ enum Commands {
         scope: Scope,
     },
     Add {
-        source: String,
+        /// Source type: local | github | git | marketplace
+        source_type: String,
+        /// Source value (path, org/repo, URL, <org/repo>@<plugin>, ...)
+        source_value: String,
         #[arg(long, default_value = "local")]
         scope: Scope,
         #[arg(long, num_args = 1..)]
@@ -85,11 +88,12 @@ async fn main() -> Result<()> {
         Commands::Init { scope } => agix::commands::init::run(scope.as_str()).await,
         Commands::Install { scope } => agix::commands::install::run(scope.as_str()).await,
         Commands::Add {
-            source,
+            source_type,
+            source_value,
             scope,
             cli,
             version,
-        } => agix::commands::add::run(source, scope.as_str(), cli, version).await,
+        } => agix::commands::add::run(source_type, source_value, scope.as_str(), cli, version).await,
         Commands::Remove { name, scope, cli } => {
             agix::commands::remove::run(name, scope.as_str(), cli).await
         }
