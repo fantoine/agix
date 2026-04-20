@@ -1,133 +1,89 @@
 pub mod git;
 pub mod github;
 pub mod local;
+pub mod marketplace;
+
+use async_trait::async_trait;
+use std::path::{Path, PathBuf};
 
 use crate::error::{AgixError, Result};
 
-#[derive(Debug, Clone)]
-pub enum SourceSpec {
-    GitHub {
-        org: String,
-        repo: String,
-        ref_str: Option<String>,
+/// What a fetch yielded. Marketplace sources don't fetch files — they delegate
+/// to a CLI driver that owns its own plugin directory.
+#[derive(Debug)]
+pub enum FetchOutcome {
+    Fetched {
+        path: PathBuf,
+        sha: Option<String>,
+        content_hash: Option<String>,
     },
-    Git {
-        url: String,
-        ref_str: Option<String>,
-    },
-    Local {
-        path: std::path::PathBuf,
-    },
-    // Format: "marketplace@<org/marketplace-repo>@<plugin>"
-    Marketplace {
+    DelegateToDriver {
         marketplace: String,
         plugin: String,
     },
 }
 
-impl SourceSpec {
-    pub fn parse(s: &str) -> Result<Self> {
-        if let Some(rest) = s.strip_prefix("github:") {
-            let (path, ref_str) = split_ref(rest);
-            let (org, repo) = path.split_once('/').ok_or_else(|| {
-                AgixError::InvalidSource(format!(
-                    "github source must be 'github:org/repo', got: {s}"
-                ))
-            })?;
-            return Ok(SourceSpec::GitHub {
-                org: org.to_owned(),
-                repo: repo.to_owned(),
-                ref_str: ref_str.map(str::to_owned),
-            });
-        }
-        if let Some(rest) = s.strip_prefix("git:") {
-            let (url, ref_str) = split_ref(rest);
-            return Ok(SourceSpec::Git {
-                url: url.to_owned(),
-                ref_str: ref_str.map(str::to_owned),
-            });
-        }
-        if let Some(path) = s.strip_prefix("local:") {
-            return Ok(SourceSpec::Local {
-                path: std::path::PathBuf::from(path),
-            });
-        }
-        // Marketplace: "marketplace:<org/repo>@<plugin>"
-        if let Some(after) = s.strip_prefix("marketplace:") {
-            let (marketplace, plugin) = after.split_once('@').ok_or_else(|| {
-                AgixError::InvalidSource(format!(
-                    "marketplace source must be 'marketplace:<org/repo>@<plugin>', got: {s}"
-                ))
-            })?;
-            return Ok(SourceSpec::Marketplace {
-                marketplace: marketplace.to_owned(),
-                plugin: plugin.to_owned(),
-            });
-        }
-        Err(AgixError::InvalidSource(format!(
-            "unknown source scheme: {s}"
-        )))
+#[async_trait]
+pub trait Source: Send + Sync {
+    /// Scheme prefix (e.g. "github", "git", "local", "marketplace"). Matches
+    /// the left side of `<scheme>:<value>` in Agentfile source strings.
+    fn scheme(&self) -> &'static str;
+
+    /// Canonical `<scheme>:<value>` form. Must roundtrip through
+    /// `sources::parse_source`.
+    fn canonical(&self) -> String;
+
+    /// Name to suggest when adding this source without an explicit name.
+    fn suggested_name(&self) -> Result<String>;
+
+    /// Fetch source files into `dest`, or signal that a CLI driver owns this.
+    async fn fetch(&self, dest: &Path) -> Result<FetchOutcome>;
+
+    /// Filesystem path this source refers to, if any. Used by `export` to
+    /// vendor local directories into the archive. Default: None.
+    fn local_path(&self) -> Option<&Path> {
+        None
     }
 
-    pub fn suggested_name(&self) -> Result<String> {
-        match self {
-            SourceSpec::Local { path } => path
-                .components()
-                .filter_map(|c| match c {
-                    std::path::Component::Normal(s) => s.to_str(),
-                    _ => None,
-                })
-                .next_back()
-                .map(str::to_owned)
-                .ok_or_else(|| {
-                    AgixError::InvalidSource(format!(
-                        "cannot derive name from path {}",
-                        path.display()
-                    ))
-                }),
-            SourceSpec::GitHub { repo, .. } => Ok(repo.clone()),
-            SourceSpec::Git { url, ref_str: _ } => {
-                let last = url.trim_end_matches('/').rsplit('/').next().unwrap_or(url);
-                Ok(last.trim_end_matches(".git").to_owned())
-            }
-            SourceSpec::Marketplace { plugin, .. } => Ok(plugin.clone()),
-        }
-    }
-
-    pub fn canonical(&self) -> String {
-        match self {
-            SourceSpec::GitHub { org, repo, ref_str } => {
-                let base = format!("github:{org}/{repo}");
-                if let Some(r) = ref_str {
-                    format!("{base}@{r}")
-                } else {
-                    base
-                }
-            }
-            SourceSpec::Git { url, ref_str } => {
-                let base = format!("git:{url}");
-                if let Some(r) = ref_str {
-                    format!("{base}@{r}")
-                } else {
-                    base
-                }
-            }
-            SourceSpec::Local { path } => format!("local:{}", path.display()),
-            SourceSpec::Marketplace {
-                marketplace,
-                plugin,
-            } => {
-                format!("marketplace:{marketplace}@{plugin}")
-            }
-        }
+    /// If this source delegates to a CLI marketplace, return `(marketplace, plugin)`.
+    /// Used by uninstall routing to avoid fetching just to learn the source kind.
+    /// Default: None.
+    fn as_marketplace(&self) -> Option<(&str, &str)> {
+        None
     }
 }
 
-fn split_ref(s: &str) -> (&str, Option<&str>) {
-    match s.find('@') {
-        Some(i) => (&s[..i], Some(&s[i + 1..])),
-        None => (s, None),
+/// A registered scheme that knows how to parse its own `<scheme>:<value>` form.
+pub trait SourceScheme: Send + Sync {
+    fn scheme(&self) -> &'static str;
+    fn parse(&self, value: &str) -> Result<Box<dyn Source>>;
+}
+
+pub fn all_schemes() -> Vec<Box<dyn SourceScheme>> {
+    vec![
+        Box::new(local::LocalScheme),
+        Box::new(github::GitHubScheme),
+        Box::new(git::GitScheme),
+        Box::new(marketplace::MarketplaceScheme),
+    ]
+}
+
+pub fn scheme_names() -> Vec<&'static str> {
+    all_schemes().iter().map(|s| s.scheme()).collect()
+}
+
+pub fn parse_source(s: &str) -> Result<Box<dyn Source>> {
+    let (scheme, value) = s
+        .split_once(':')
+        .ok_or_else(|| AgixError::InvalidSource(format!("missing scheme in source: {s}")))?;
+    for sch in all_schemes() {
+        if sch.scheme() == scheme {
+            return sch.parse(value);
+        }
     }
+    Err(AgixError::InvalidSource(format!(
+        "unknown source scheme: {scheme}"
+    )))
 }
 
 #[cfg(test)]
@@ -135,86 +91,123 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_github_source() {
-        let spec = SourceSpec::parse("github:org/repo").unwrap();
-        assert!(
-            matches!(spec, SourceSpec::GitHub { ref org, ref repo, ref_str: None } if org == "org" && repo == "repo")
-        );
+    fn parse_routes_to_correct_scheme() {
+        let s = parse_source("local:/tmp/foo").unwrap();
+        assert_eq!(s.scheme(), "local");
+        assert_eq!(s.canonical(), "local:/tmp/foo");
     }
 
     #[test]
-    fn parse_github_with_version() {
-        let spec = SourceSpec::parse("github:org/repo@main").unwrap();
-        assert!(matches!(spec, SourceSpec::GitHub { ref_str: Some(ref r), .. } if r == "main"));
+    fn parse_github_source() {
+        let s = parse_source("github:org/repo@main").unwrap();
+        assert_eq!(s.scheme(), "github");
+        assert_eq!(s.canonical(), "github:org/repo@main");
+        assert_eq!(s.suggested_name().unwrap(), "repo");
+    }
+
+    #[test]
+    fn parse_github_source_no_ref() {
+        let s = parse_source("github:org/repo").unwrap();
+        assert_eq!(s.scheme(), "github");
+        assert_eq!(s.canonical(), "github:org/repo");
     }
 
     #[test]
     fn parse_git_source() {
-        let spec = SourceSpec::parse("git:https://example.com/repo.git").unwrap();
-        assert!(matches!(spec, SourceSpec::Git { .. }));
+        let s = parse_source("git:https://example.com/repo.git").unwrap();
+        assert_eq!(s.scheme(), "git");
+        assert_eq!(s.suggested_name().unwrap(), "repo");
     }
 
     #[test]
     fn parse_local_source() {
-        let spec = SourceSpec::parse("local:../my-tool").unwrap();
-        assert!(matches!(spec, SourceSpec::Local { .. }));
+        let s = parse_source("local:../my-tool").unwrap();
+        assert_eq!(s.scheme(), "local");
+        assert_eq!(s.suggested_name().unwrap(), "my-tool");
+    }
+
+    #[test]
+    fn parse_local_suggested_name_strips_trailing_slash() {
+        let s = parse_source("local:/tmp/foo/my-pkg/").unwrap();
+        assert_eq!(s.suggested_name().unwrap(), "my-pkg");
     }
 
     #[test]
     fn parse_marketplace_source() {
-        let spec = SourceSpec::parse("marketplace:fantoine/claude-plugins@roundtable").unwrap();
-        assert!(
-            matches!(spec, SourceSpec::Marketplace { ref marketplace, ref plugin }
-            if marketplace == "fantoine/claude-plugins" && plugin == "roundtable")
+        let s = parse_source("marketplace:fantoine/claude-plugins@roundtable").unwrap();
+        assert_eq!(s.scheme(), "marketplace");
+        assert_eq!(
+            s.canonical(),
+            "marketplace:fantoine/claude-plugins@roundtable"
+        );
+        assert_eq!(s.suggested_name().unwrap(), "roundtable");
+        assert_eq!(
+            s.as_marketplace(),
+            Some(("fantoine/claude-plugins", "roundtable"))
         );
     }
 
     #[test]
-    fn parse_invalid_source() {
-        assert!(SourceSpec::parse("invalid").is_err());
+    fn parse_unknown_scheme_fails() {
+        assert!(parse_source("nope:xxx").is_err());
     }
 
     #[test]
-    fn local_suggested_name_is_last_path_component() {
-        let spec = SourceSpec::Local {
-            path: "/tmp/foo/my-pkg".into(),
-        };
-        assert_eq!(spec.suggested_name().unwrap(), "my-pkg");
+    fn parse_missing_scheme_fails() {
+        assert!(parse_source("no-colon").is_err());
     }
 
     #[test]
-    fn local_suggested_name_strips_trailing_slash() {
-        let spec = SourceSpec::Local {
-            path: "/tmp/foo/my-pkg/".into(),
-        };
-        assert_eq!(spec.suggested_name().unwrap(), "my-pkg");
+    fn scheme_names_lists_all_registered() {
+        let names = scheme_names();
+        assert!(names.contains(&"local"));
+        assert!(names.contains(&"github"));
+        assert!(names.contains(&"git"));
+        assert!(names.contains(&"marketplace"));
     }
 
     #[test]
-    fn github_suggested_name_is_repo() {
-        let spec = SourceSpec::GitHub {
-            org: "fantoine".into(),
-            repo: "claude-later".into(),
-            ref_str: None,
-        };
-        assert_eq!(spec.suggested_name().unwrap(), "claude-later");
+    fn local_path_exposes_path_only_for_local() {
+        let local = parse_source("local:/tmp/foo").unwrap();
+        assert_eq!(
+            local.local_path().map(|p| p.display().to_string()),
+            Some("/tmp/foo".into())
+        );
+        let gh = parse_source("github:org/repo").unwrap();
+        assert!(gh.local_path().is_none());
+        let git = parse_source("git:https://example.com/repo.git").unwrap();
+        assert!(git.local_path().is_none());
+        let mk = parse_source("marketplace:org/repo@plug").unwrap();
+        assert!(mk.local_path().is_none());
     }
 
     #[test]
-    fn git_suggested_name_strips_dot_git() {
-        let spec = SourceSpec::Git {
-            url: "https://example.com/foo.git".into(),
-            ref_str: None,
-        };
-        assert_eq!(spec.suggested_name().unwrap(), "foo");
+    fn as_marketplace_is_some_only_for_marketplace() {
+        let local = parse_source("local:/tmp/foo").unwrap();
+        assert!(local.as_marketplace().is_none());
+        let gh = parse_source("github:org/repo").unwrap();
+        assert!(gh.as_marketplace().is_none());
+        let git = parse_source("git:https://example.com/repo.git").unwrap();
+        assert!(git.as_marketplace().is_none());
     }
 
     #[test]
-    fn marketplace_suggested_name_is_plugin() {
-        let spec = SourceSpec::Marketplace {
-            marketplace: "fantoine/claude-plugins".into(),
-            plugin: "roundtable".into(),
-        };
-        assert_eq!(spec.suggested_name().unwrap(), "roundtable");
+    fn canonical_roundtrips_through_parse() {
+        for input in [
+            "local:/tmp/foo",
+            "github:org/repo",
+            "github:org/repo@v1.0",
+            "git:https://example.com/repo.git",
+            "git:https://example.com/repo.git@abc",
+            "marketplace:org/repo@plugin",
+        ] {
+            let parsed = parse_source(input).unwrap();
+            assert_eq!(parsed.canonical(), input, "roundtrip failed for {input}");
+        }
+    }
+
+    #[test]
+    fn parse_marketplace_without_plugin_fails() {
+        assert!(parse_source("marketplace:org/repo").is_err());
     }
 }

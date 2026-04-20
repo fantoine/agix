@@ -4,7 +4,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::manifest::agentfile::{Dependency, ProjectManifest};
-use crate::sources::SourceSpec;
+use crate::sources::parse_source;
 
 /// Export the current project into a self-contained zip archive.
 ///
@@ -101,9 +101,11 @@ fn rewrite_local_deps(
     local_sources: &mut HashMap<String, PathBuf>,
 ) {
     for (name, dep) in deps.iter_mut() {
-        if let Ok(SourceSpec::Local { path }) = SourceSpec::parse(&dep.source) {
-            local_sources.insert(name.clone(), path);
-            dep.source = format!("local:./local-sources/{name}");
+        if let Ok(src) = parse_source(&dep.source) {
+            if let Some(path) = src.local_path() {
+                local_sources.insert(name.clone(), path.to_path_buf());
+                dep.source = format!("local:./local-sources/{name}");
+            }
         }
     }
 }

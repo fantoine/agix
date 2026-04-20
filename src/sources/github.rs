@@ -1,14 +1,11 @@
+use async_trait::async_trait;
 use std::io::Read as _;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
 
 use crate::error::{AgixError, Result};
-
-pub struct FetchedGitHub {
-    pub sha: String,
-    pub path: PathBuf,
-}
+use crate::sources::{FetchOutcome, Source, SourceScheme};
 
 pub struct GitHubSource {
     org: String,
@@ -111,8 +108,28 @@ impl GitHubSource {
             self.org, self.repo
         )))
     }
+}
 
-    pub async fn fetch(&self, dest: &Path) -> Result<FetchedGitHub> {
+#[async_trait]
+impl Source for GitHubSource {
+    fn scheme(&self) -> &'static str {
+        "github"
+    }
+
+    fn canonical(&self) -> String {
+        let base = format!("github:{}/{}", self.org, self.repo);
+        if let Some(r) = &self.ref_str {
+            format!("{base}@{r}")
+        } else {
+            base
+        }
+    }
+
+    fn suggested_name(&self) -> Result<String> {
+        Ok(self.repo.clone())
+    }
+
+    async fn fetch(&self, dest: &Path) -> Result<FetchOutcome> {
         let sha = self.resolve_ref().await?;
 
         let zip_url = format!(
@@ -162,10 +179,36 @@ impl GitHubSource {
             }
         }
 
-        Ok(FetchedGitHub {
-            sha,
+        Ok(FetchOutcome::Fetched {
             path: dest.to_path_buf(),
+            sha: Some(sha),
+            content_hash: None,
         })
+    }
+}
+
+pub struct GitHubScheme;
+
+impl SourceScheme for GitHubScheme {
+    fn scheme(&self) -> &'static str {
+        "github"
+    }
+
+    fn parse(&self, value: &str) -> Result<Box<dyn Source>> {
+        let (path, ref_str) = split_ref(value);
+        let (org, repo) = path.split_once('/').ok_or_else(|| {
+            AgixError::InvalidSource(format!(
+                "github source must be 'github:org/repo', got: github:{value}"
+            ))
+        })?;
+        Ok(Box::new(GitHubSource::new(org, repo, ref_str)))
+    }
+}
+
+fn split_ref(s: &str) -> (&str, Option<&str>) {
+    match s.find('@') {
+        Some(i) => (&s[..i], Some(&s[i + 1..])),
+        None => (s, None),
     }
 }
 

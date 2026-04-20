@@ -5,7 +5,7 @@ use crate::core::resolver::Resolver;
 use crate::drivers::{all_drivers, driver_for, FetchedPackage, Scope};
 use crate::error::Result;
 use crate::manifest::agentfile::ProjectManifest;
-use crate::sources::{git::GitSource, github::GitHubSource, local::LocalSource, SourceSpec};
+use crate::sources::{parse_source, FetchOutcome};
 
 pub struct Installer;
 
@@ -30,141 +30,124 @@ impl Installer {
             let fetch_dir = tmp.path().join(&dep.name);
             std::fs::create_dir_all(&fetch_dir)?;
 
-            let spec = SourceSpec::parse(&dep.source)?;
+            let source = parse_source(&dep.source)?;
+            let outcome = source.fetch(&fetch_dir).await?;
 
-            if let SourceSpec::Marketplace {
-                marketplace,
-                plugin,
-            } = &spec
-            {
-                let target_clis: Vec<String> = if dep.cli.is_empty() {
-                    all_drivers()
-                        .into_iter()
-                        .filter(|d| d.detect())
-                        .map(|d| d.name().to_string())
-                        .collect()
-                } else {
-                    dep.cli.clone()
-                };
+            match outcome {
+                FetchOutcome::DelegateToDriver {
+                    marketplace,
+                    plugin,
+                } => {
+                    let target_clis: Vec<String> = if dep.cli.is_empty() {
+                        all_drivers()
+                            .into_iter()
+                            .filter(|d| d.detect())
+                            .map(|d| d.name().to_string())
+                            .collect()
+                    } else {
+                        dep.cli.clone()
+                    };
 
-                let mut all_files: Vec<InstalledFile> = Vec::new();
-                for cli_name in &target_clis {
-                    let driver = match driver_for(cli_name) {
-                        Some(d) => d,
-                        None => {
-                            crate::output::warn(&format!("no driver for '{cli_name}', skipping"));
+                    let mut all_files: Vec<InstalledFile> = Vec::new();
+                    for cli_name in &target_clis {
+                        let driver = match driver_for(cli_name) {
+                            Some(d) => d,
+                            None => {
+                                crate::output::warn(&format!(
+                                    "no driver for '{cli_name}', skipping"
+                                ));
+                                continue;
+                            }
+                        };
+                        if !driver.supports_marketplace() {
+                            crate::output::warn(&format!(
+                                "marketplace not supported for '{cli_name}', skipping"
+                            ));
                             continue;
                         }
-                    };
-                    if !driver.supports_marketplace() {
-                        crate::output::warn(&format!(
-                            "marketplace not supported for '{cli_name}', skipping"
+                        if !driver.detect() {
+                            crate::output::warn(&format!("'{cli_name}' not detected, skipping"));
+                            continue;
+                        }
+                        crate::output::info(&format!(
+                            "Installing {plugin} from marketplace {marketplace} via {cli_name}..."
                         ));
-                        continue;
-                    }
-                    if !driver.detect() {
-                        crate::output::warn(&format!("'{cli_name}' not detected, skipping"));
-                        continue;
-                    }
-                    crate::output::info(&format!(
-                        "Installing {plugin} from marketplace {marketplace} via {cli_name}..."
-                    ));
-                    match driver.install_marketplace_plugin(marketplace, plugin, &scope) {
-                        Ok(files) => {
-                            crate::output::success(&format!(
-                                "Plugin '{plugin}' installed for {cli_name}"
-                            ));
-                            all_files.extend(files);
-                        }
-                        Err(e) => {
-                            crate::output::warn(&format!("install failed for {cli_name}: {e}"));
+                        match driver.install_marketplace_plugin(&marketplace, &plugin, &scope) {
+                            Ok(files) => {
+                                crate::output::success(&format!(
+                                    "Plugin '{plugin}' installed for {cli_name}"
+                                ));
+                                all_files.extend(files);
+                            }
+                            Err(e) => {
+                                crate::output::warn(&format!("install failed for {cli_name}: {e}"));
+                            }
                         }
                     }
-                }
 
-                lock.upsert(LockedPackage {
-                    name: dep.name.clone(),
-                    source: dep.source.clone(),
-                    sha: None,
-                    content_hash: None,
-                    version: None,
-                    cli: dep.cli.clone(),
-                    scope: scope_str.to_owned(),
-                    files: all_files,
-                });
-                lock.to_file(lock_path)?;
-                continue;
-            }
-
-            // Fetch the package into the temp directory.
-            let fetched: FetchedPackage = match &spec {
-                SourceSpec::Local { path } => {
-                    let f = LocalSource::new(path.clone()).fetch(&fetch_dir)?;
-                    FetchedPackage {
-                        path: f.path,
+                    lock.upsert(LockedPackage {
+                        name: dep.name.clone(),
+                        source: dep.source.clone(),
                         sha: None,
-                        content_hash: Some(f.content_hash),
-                    }
-                }
-                SourceSpec::GitHub { org, repo, ref_str } => {
-                    let f = GitHubSource::new(org, repo, ref_str.as_deref())
-                        .fetch(&fetch_dir)
-                        .await?;
-                    FetchedPackage {
-                        path: f.path,
-                        sha: Some(f.sha),
                         content_hash: None,
-                    }
+                        version: None,
+                        cli: dep.cli.clone(),
+                        scope: scope_str.to_owned(),
+                        files: all_files,
+                    });
+                    lock.to_file(lock_path)?;
                 }
-                SourceSpec::Git { url, ref_str } => {
-                    let f = GitSource::new(url, ref_str.as_deref()).fetch(&fetch_dir)?;
-                    FetchedPackage {
-                        path: f.path,
-                        sha: Some(f.sha),
-                        content_hash: None,
-                    }
-                }
-                SourceSpec::Marketplace { .. } => unreachable!("handled above"),
-            };
+                FetchOutcome::Fetched {
+                    path,
+                    sha,
+                    content_hash,
+                } => {
+                    let fetched = FetchedPackage {
+                        path,
+                        sha,
+                        content_hash,
+                    };
 
-            // Install via each target driver.
-            let mut all_files: Vec<InstalledFile> = Vec::new();
-            for cli_name in &dep.cli {
-                let driver = match driver_for(cli_name) {
-                    Some(d) => d,
-                    None => {
-                        crate::output::warn(&format!(
-                            "no driver found for CLI '{}', skipping install of '{}'",
-                            cli_name, dep.name
-                        ));
-                        continue;
+                    // Install via each target driver.
+                    let mut all_files: Vec<InstalledFile> = Vec::new();
+                    for cli_name in &dep.cli {
+                        let driver = match driver_for(cli_name) {
+                            Some(d) => d,
+                            None => {
+                                crate::output::warn(&format!(
+                                    "no driver found for CLI '{}', skipping install of '{}'",
+                                    cli_name, dep.name
+                                ));
+                                continue;
+                            }
+                        };
+                        if !driver.detect() {
+                            crate::output::warn(&format!(
+                                "CLI '{}' not detected, skipping install of '{}'",
+                                cli_name, dep.name
+                            ));
+                            continue;
+                        }
+                        let files = driver.install(&dep.name, &fetched, &scope)?;
+                        all_files.extend(files);
                     }
-                };
-                if !driver.detect() {
-                    crate::output::warn(&format!(
-                        "CLI '{}' not detected, skipping install of '{}'",
-                        cli_name, dep.name
-                    ));
-                    continue;
+
+                    let sha = fetched.sha.clone();
+                    let content_hash = fetched.content_hash.clone();
+
+                    lock.upsert(LockedPackage {
+                        name: dep.name.clone(),
+                        source: dep.source.clone(),
+                        sha,
+                        content_hash,
+                        version: None,
+                        cli: dep.cli.clone(),
+                        scope: scope_str.to_owned(),
+                        files: all_files,
+                    });
+                    lock.to_file(lock_path)?;
                 }
-                let files = driver.install(&dep.name, &fetched, &scope)?;
-                all_files.extend(files);
             }
-
-            let sha = fetched.sha.clone();
-            let content_hash = fetched.content_hash.clone();
-
-            lock.upsert(LockedPackage {
-                name: dep.name.clone(),
-                source: dep.source.clone(),
-                sha,
-                content_hash,
-                version: None,
-                cli: dep.cli.clone(),
-                scope: scope_str.to_owned(),
-                files: all_files,
-            });
-            lock.to_file(lock_path)?;
         }
 
         Ok(())
@@ -181,7 +164,7 @@ impl Installer {
             }
         };
 
-        let spec = SourceSpec::parse(&pkg.source)?;
+        let source = parse_source(&pkg.source)?;
         let cli_names = pkg.cli.clone();
         let files = pkg.files.clone();
 
@@ -196,18 +179,14 @@ impl Installer {
                     continue;
                 }
             };
-            match &spec {
-                SourceSpec::Marketplace {
-                    marketplace,
-                    plugin,
-                } => {
-                    if let Err(e) = driver.uninstall_marketplace_plugin(marketplace, plugin) {
-                        crate::output::warn(&format!(
-                            "marketplace uninstall failed for {cli_name}: {e}"
-                        ));
-                    }
+            if let Some((marketplace, plugin)) = source.as_marketplace() {
+                if let Err(e) = driver.uninstall_marketplace_plugin(marketplace, plugin) {
+                    crate::output::warn(&format!(
+                        "marketplace uninstall failed for {cli_name}: {e}"
+                    ));
                 }
-                _ => driver.uninstall(&files)?,
+            } else {
+                driver.uninstall(&files)?;
             }
         }
 

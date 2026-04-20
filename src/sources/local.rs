@@ -1,11 +1,8 @@
+use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 
-use crate::error::Result;
-
-pub struct FetchedLocal {
-    pub content_hash: String,
-    pub path: PathBuf,
-}
+use crate::error::{AgixError, Result};
+use crate::sources::{FetchOutcome, Source, SourceScheme};
 
 pub struct LocalSource {
     pub path: PathBuf,
@@ -14,15 +11,6 @@ pub struct LocalSource {
 impl LocalSource {
     pub fn new(path: PathBuf) -> Self {
         Self { path }
-    }
-
-    pub fn fetch(&self, dest: &Path) -> Result<FetchedLocal> {
-        copy_dir_all(&self.path, dest)?;
-        let content_hash = Self::hash_dir(dest)?;
-        Ok(FetchedLocal {
-            content_hash,
-            path: dest.to_path_buf(),
-        })
     }
 
     pub fn hash_dir(dir: &Path) -> Result<String> {
@@ -47,6 +35,60 @@ impl LocalSource {
     }
 }
 
+#[async_trait]
+impl Source for LocalSource {
+    fn scheme(&self) -> &'static str {
+        "local"
+    }
+
+    fn canonical(&self) -> String {
+        format!("local:{}", self.path.display())
+    }
+
+    fn suggested_name(&self) -> Result<String> {
+        self.path
+            .components()
+            .filter_map(|c| match c {
+                std::path::Component::Normal(s) => s.to_str(),
+                _ => None,
+            })
+            .next_back()
+            .map(str::to_owned)
+            .ok_or_else(|| {
+                AgixError::InvalidSource(format!(
+                    "cannot derive name from path {}",
+                    self.path.display()
+                ))
+            })
+    }
+
+    async fn fetch(&self, dest: &Path) -> Result<FetchOutcome> {
+        copy_dir_all(&self.path, dest)?;
+        let content_hash = Self::hash_dir(dest)?;
+        Ok(FetchOutcome::Fetched {
+            path: dest.to_path_buf(),
+            sha: None,
+            content_hash: Some(content_hash),
+        })
+    }
+
+    fn local_path(&self) -> Option<&Path> {
+        Some(&self.path)
+    }
+}
+
+pub struct LocalScheme;
+
+impl SourceScheme for LocalScheme {
+    fn scheme(&self) -> &'static str {
+        "local"
+    }
+
+    fn parse(&self, value: &str) -> Result<Box<dyn Source>> {
+        Ok(Box::new(LocalSource::new(PathBuf::from(value))))
+    }
+}
+
 fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
     std::fs::create_dir_all(dst)?;
     for entry in std::fs::read_dir(src)? {
@@ -67,18 +109,23 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
-    #[test]
-    fn fetch_local_source_copies_files() {
+    #[tokio::test]
+    async fn fetch_local_source_copies_files() {
         let src_dir = tempdir().unwrap();
         std::fs::write(src_dir.path().join("skill.md"), "# skill").unwrap();
 
         let dest_dir = tempdir().unwrap();
-        let fetched = LocalSource::new(src_dir.path().to_path_buf())
-            .fetch(dest_dir.path())
-            .unwrap();
+        let source = LocalSource::new(src_dir.path().to_path_buf());
+        let outcome = source.fetch(dest_dir.path()).await.unwrap();
 
         assert!(dest_dir.path().join("skill.md").exists());
-        assert!(!fetched.content_hash.is_empty());
+        match outcome {
+            FetchOutcome::Fetched {
+                content_hash: Some(h),
+                ..
+            } => assert!(!h.is_empty()),
+            other => panic!("expected Fetched with content_hash, got {other:?}"),
+        }
     }
 
     #[test]
