@@ -1,9 +1,8 @@
+use async_trait::async_trait;
 use std::path::Path;
 
-pub struct FetchedGit {
-    pub sha: String,
-    pub path: std::path::PathBuf,
-}
+use crate::error::Result;
+use crate::sources::{FetchOutcome, Source, SourceScheme};
 
 pub struct GitSource {
     url: String,
@@ -17,8 +16,34 @@ impl GitSource {
             ref_str: ref_str.map(str::to_owned),
         }
     }
+}
 
-    pub fn fetch(&self, dest: &Path) -> crate::error::Result<FetchedGit> {
+#[async_trait]
+impl Source for GitSource {
+    fn scheme(&self) -> &'static str {
+        "git"
+    }
+
+    fn canonical(&self) -> String {
+        let base = format!("git:{}", self.url);
+        if let Some(r) = &self.ref_str {
+            format!("{base}@{r}")
+        } else {
+            base
+        }
+    }
+
+    fn suggested_name(&self) -> Result<String> {
+        let last = self
+            .url
+            .trim_end_matches('/')
+            .rsplit('/')
+            .next()
+            .unwrap_or(&self.url);
+        Ok(last.trim_end_matches(".git").to_owned())
+    }
+
+    async fn fetch(&self, dest: &Path) -> Result<FetchOutcome> {
         let repo = git2::Repository::clone(&self.url, dest)?;
 
         if let Some(ref ref_str) = self.ref_str {
@@ -29,10 +54,31 @@ impl GitSource {
 
         let sha = repo.head()?.peel_to_commit()?.id().to_string();
 
-        Ok(FetchedGit {
-            sha,
+        Ok(FetchOutcome::Fetched {
             path: dest.to_path_buf(),
+            sha: Some(sha),
+            content_hash: None,
         })
+    }
+}
+
+pub struct GitScheme;
+
+impl SourceScheme for GitScheme {
+    fn scheme(&self) -> &'static str {
+        "git"
+    }
+
+    fn parse(&self, value: &str) -> Result<Box<dyn Source>> {
+        let (url, ref_str) = split_ref(value);
+        Ok(Box::new(GitSource::new(url, ref_str)))
+    }
+}
+
+fn split_ref(s: &str) -> (&str, Option<&str>) {
+    match s.find('@') {
+        Some(i) => (&s[..i], Some(&s[i + 1..])),
+        None => (s, None),
     }
 }
 
@@ -41,8 +87,8 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
-    #[test]
-    fn fetch_local_git_repo() {
+    #[tokio::test]
+    async fn fetch_local_git_repo() {
         let src = tempdir().unwrap();
         let repo = git2::Repository::init(src.path()).unwrap();
         let sig = git2::Signature::now("test", "test@test.com").unwrap();
@@ -57,9 +103,14 @@ mod tests {
 
         let dest = tempdir().unwrap();
         let source = GitSource::new(src.path().to_str().unwrap(), None);
-        let fetched = source.fetch(dest.path()).unwrap();
+        let outcome = source.fetch(dest.path()).await.unwrap();
 
-        assert!(!fetched.sha.is_empty());
+        match outcome {
+            FetchOutcome::Fetched { sha: Some(sha), .. } => {
+                assert!(!sha.is_empty());
+            }
+            other => panic!("expected Fetched with sha, got {other:?}"),
+        }
         assert!(dest.path().join("skill.md").exists());
     }
 }

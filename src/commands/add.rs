@@ -1,7 +1,5 @@
 use crate::manifest::agentfile::Dependency;
 
-const VALID_SOURCE_TYPES: &[&str] = &["local", "github", "git", "marketplace"];
-
 pub async fn run(
     source_type: String,
     source_value: String,
@@ -9,11 +7,12 @@ pub async fn run(
     cli_filter: Vec<String>,
     version: Option<String>,
 ) -> anyhow::Result<()> {
-    if !VALID_SOURCE_TYPES.contains(&source_type.as_str()) {
+    let valid_source_types = crate::sources::scheme_names();
+    if !valid_source_types.contains(&source_type.as_str()) {
         anyhow::bail!(
             "unknown source type '{}' — expected one of: {}",
             source_type,
-            VALID_SOURCE_TYPES.join(", ")
+            valid_source_types.join(", ")
         );
     }
     let source = format!("{}:{}", source_type, source_value);
@@ -21,8 +20,8 @@ pub async fn run(
     let (agentfile_path, lock_path, scope) = super::agentfile_paths(scope)?;
     let mut manifest = crate::manifest::agentfile::ProjectManifest::from_file(&agentfile_path)?;
 
-    let spec = crate::sources::SourceSpec::parse(&source)?;
-    let name = spec.suggested_name()?;
+    let src = crate::sources::parse_source(&source)?;
+    let name = src.suggested_name()?;
 
     let dep = Dependency {
         source: source.clone(),
