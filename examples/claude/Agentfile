@@ -1,5 +1,5 @@
 [agix]
-cli = ["claude-code"]
+cli = ["claude"]
 
-[claude-code.dependencies]
+[claude.dependencies]
 claude-later = "github:fantoine/claude-later"

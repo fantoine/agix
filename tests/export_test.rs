@@ -4,11 +4,7 @@ use tempfile::tempdir;
 #[test]
 fn export_creates_zip_with_agentfile() {
     let dir = tempdir().unwrap();
-    std::fs::write(
-        dir.path().join("Agentfile"),
-        "[agix]\ncli = [\"claude-code\"]\n",
-    )
-    .unwrap();
+    std::fs::write(dir.path().join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
     std::fs::write(dir.path().join("Agentfile.lock"), "").unwrap();
 
     let output = dir.path().join("backup.zip");

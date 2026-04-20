@@ -2,7 +2,7 @@
 name = "my-package"
 version = "0.1.0"
 description = "An example Agix package"
-cli = ["claude-code"]
+cli = ["claude"]
 
 [hooks]
 post-install = "echo 'Installation complete'"

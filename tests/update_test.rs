@@ -20,7 +20,7 @@ fn update_succeeds_with_empty_manifest() {
         dir.path().join("Agentfile"),
         r#"
 [agix]
-cli = ["claude-code"]
+cli = ["claude"]
 "#,
     )
     .unwrap();

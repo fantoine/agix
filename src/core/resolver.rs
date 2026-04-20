@@ -111,16 +111,16 @@ mod tests {
         let manifest = make_manifest(
             r#"
 [agix]
-cli = ["claude-code"]
+cli = ["claude"]
 
-[claude-code.dependencies]
+[claude.dependencies]
 superpowers = { source = "github:org/superpowers" }
 "#,
         );
-        let resolved = Resolver::resolve(&manifest, &["claude-code".to_string()]);
+        let resolved = Resolver::resolve(&manifest, &["claude".to_string()]);
         assert_eq!(resolved.len(), 1);
         assert_eq!(resolved[0].name, "superpowers");
-        assert_eq!(resolved[0].cli, vec!["claude-code".to_string()]);
+        assert_eq!(resolved[0].cli, vec!["claude".to_string()]);
     }
 
     #[test]
@@ -128,16 +128,15 @@ superpowers = { source = "github:org/superpowers" }
         let manifest = make_manifest(
             r#"
 [agix]
-cli = ["claude-code", "codex"]
+cli = ["claude", "codex"]
 
 [dependencies]
 rtk = { source = "github:org/rtk", exclude = ["codex"] }
 "#,
         );
-        let resolved =
-            Resolver::resolve(&manifest, &["claude-code".to_string(), "codex".to_string()]);
+        let resolved = Resolver::resolve(&manifest, &["claude".to_string(), "codex".to_string()]);
         let rtk = resolved.iter().find(|r| r.name == "rtk").unwrap();
-        assert!(rtk.cli.contains(&"claude-code".to_string()));
+        assert!(rtk.cli.contains(&"claude".to_string()));
         assert!(!rtk.cli.contains(&"codex".to_string()));
     }
 
@@ -146,16 +145,15 @@ rtk = { source = "github:org/rtk", exclude = ["codex"] }
         let manifest = make_manifest(
             r#"
 [agix]
-cli = ["claude-code", "codex"]
+cli = ["claude", "codex"]
 
 [dependencies]
 shared = { source = "github:org/shared" }
 "#,
         );
-        let resolved =
-            Resolver::resolve(&manifest, &["claude-code".to_string(), "codex".to_string()]);
+        let resolved = Resolver::resolve(&manifest, &["claude".to_string(), "codex".to_string()]);
         let shared = resolved.iter().find(|r| r.name == "shared").unwrap();
-        assert!(shared.cli.contains(&"claude-code".to_string()));
+        assert!(shared.cli.contains(&"claude".to_string()));
         assert!(shared.cli.contains(&"codex".to_string()));
     }
 }

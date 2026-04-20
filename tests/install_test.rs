@@ -4,7 +4,7 @@ use agix::manifest::agentfile::ProjectManifest;
 use tempfile::tempdir;
 
 #[tokio::test]
-async fn install_local_package_for_claude_code() {
+async fn install_local_package_for_claude() {
     let pkg_dir = tempdir().unwrap();
     let skills_dir = pkg_dir.path().join("skills");
     std::fs::create_dir(&skills_dir).unwrap();
@@ -13,9 +13,9 @@ async fn install_local_package_for_claude_code() {
     let manifest_str = format!(
         r#"
 [agix]
-cli = ["claude-code"]
+cli = ["claude"]
 
-[claude-code.dependencies]
+[claude.dependencies]
 my-pkg = {{ source = "local:{}" }}
 "#,
         pkg_dir.path().display()
@@ -46,9 +46,9 @@ async fn install_command_from_agentfile() {
     let manifest_str = format!(
         r#"
 [agix]
-cli = ["claude-code"]
+cli = ["claude"]
 
-[claude-code.dependencies]
+[claude.dependencies]
 my-pkg = {{ source = "local:{}" }}
 "#,
         pkg_dir.path().display()

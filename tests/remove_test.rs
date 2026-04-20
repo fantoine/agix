@@ -12,9 +12,9 @@ async fn remove_updates_agentfile_and_lock() {
     let manifest = format!(
         r#"
 [agix]
-cli = ["claude-code"]
+cli = ["claude"]
 
-[claude-code.dependencies]
+[claude.dependencies]
 my-pkg = {{ source = "local:{}" }}
 "#,
         pkg_dir.path().display()
@@ -53,9 +53,9 @@ async fn remove_with_cli_filter_only_removes_from_that_section() {
     let manifest = format!(
         r#"
 [agix]
-cli = ["claude-code", "codex"]
+cli = ["claude", "codex"]
 
-[claude-code.dependencies]
+[claude.dependencies]
 my-pkg = {{ source = "local:{0}" }}
 
 [codex.dependencies]
@@ -72,14 +72,14 @@ my-pkg = {{ source = "local:{0}" }}
         .assert()
         .success();
 
-    // Remove only from claude-code section
+    // Remove only from claude section
     Command::cargo_bin("agix")
         .unwrap()
         .current_dir(dir.path())
         .arg("remove")
         .arg("my-pkg")
         .arg("--cli")
-        .arg("claude-code")
+        .arg("claude")
         .assert()
         .success();
 

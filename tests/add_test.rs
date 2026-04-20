@@ -26,11 +26,7 @@ fn init_fails_if_agentfile_exists() {
 #[test]
 fn add_writes_dependency_to_agentfile() {
     let dir = tempdir().unwrap();
-    std::fs::write(
-        dir.path().join("Agentfile"),
-        "[agix]\ncli = [\"claude-code\"]\n",
-    )
-    .unwrap();
+    std::fs::write(dir.path().join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
 
     let pkg_dir = tempdir().unwrap();
     std::fs::write(pkg_dir.path().join("skill.md"), "# skill").unwrap();
@@ -41,7 +37,7 @@ fn add_writes_dependency_to_agentfile() {
         .arg("local")
         .arg(pkg_dir.path())
         .arg("--cli")
-        .arg("claude-code");
+        .arg("claude");
     cmd.assert().success();
 
     let content = std::fs::read_to_string(dir.path().join("Agentfile")).unwrap();
@@ -51,11 +47,7 @@ fn add_writes_dependency_to_agentfile() {
 #[test]
 fn add_shared_dependency_without_cli_flag() {
     let dir = tempdir().unwrap();
-    std::fs::write(
-        dir.path().join("Agentfile"),
-        "[agix]\ncli = [\"claude-code\"]\n",
-    )
-    .unwrap();
+    std::fs::write(dir.path().join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
 
     let pkg_dir = tempdir().unwrap();
     std::fs::write(pkg_dir.path().join("skill.md"), "# skill").unwrap();
@@ -73,7 +65,7 @@ fn add_shared_dependency_without_cli_flag() {
     // Serialized as [dependencies.<name>] — check the section key appears
     assert!(content.contains("dependencies"));
     // Should NOT be under a CLI-specific section
-    assert!(!content.contains("claude-code.dependencies"));
+    assert!(!content.contains("claude.dependencies"));
 }
 
 #[test]
@@ -81,7 +73,7 @@ fn add_multi_cli_dependency() {
     let dir = tempdir().unwrap();
     std::fs::write(
         dir.path().join("Agentfile"),
-        "[agix]\ncli = [\"claude-code\", \"codex\"]\n",
+        "[agix]\ncli = [\"claude\", \"codex\"]\n",
     )
     .unwrap();
 
@@ -95,25 +87,21 @@ fn add_multi_cli_dependency() {
         .arg("local")
         .arg(pkg_dir.path())
         .arg("--cli")
-        .arg("claude-code")
+        .arg("claude")
         .arg("--cli")
         .arg("codex")
         .assert()
         .success();
 
     let content = std::fs::read_to_string(dir.path().join("Agentfile")).unwrap();
-    assert!(content.contains("claude-code"));
+    assert!(content.contains("claude"));
     assert!(content.contains("codex"));
 }
 
 #[test]
 fn add_local_with_separate_type_and_value() {
     let dir = tempdir().unwrap();
-    std::fs::write(
-        dir.path().join("Agentfile"),
-        "[agix]\ncli = [\"claude-code\"]\n",
-    )
-    .unwrap();
+    std::fs::write(dir.path().join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
     let pkg_dir = tempdir().unwrap();
     std::fs::write(pkg_dir.path().join("skill.md"), "# s").unwrap();
 

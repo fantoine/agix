@@ -12,10 +12,11 @@ fn export_zip_is_self_contained_and_installable() {
     std::fs::write(
         proj.path().join("Agentfile"),
         format!(
-            "[agix]\ncli = [\"claude-code\"]\n\n[dependencies]\nmy-pkg = {{ source = \"local:{}\" }}\n",
+            "[agix]\ncli = [\"claude\"]\n\n[dependencies]\nmy-pkg = {{ source = \"local:{}\" }}\n",
             src_dir.path().display()
         ),
-    ).unwrap();
+    )
+    .unwrap();
 
     // 1. Install
     Command::cargo_bin("agix")

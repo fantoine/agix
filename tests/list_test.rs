@@ -24,7 +24,7 @@ fn list_shows_installed_packages() {
 name = "claude-later"
 source = "github:fantoine/claude-later"
 sha = "a1b2c3d4e5f6"
-cli = ["claude-code"]
+cli = ["claude"]
 scope = "local"
 files = []
 "#,
