@@ -20,13 +20,16 @@ use crate::sources::parse_source;
 /// must succeed — nothing should point to the source machine's filesystem.
 pub async fn run(scope: Scope, all: bool, output: Option<String>) -> Result<()> {
     if all {
-        bail!("--all is not yet implemented");
+        // Deferred for v0.1.0: combining local + global scopes into a single
+        // zip needs a cross-scope layout (e.g. `local/` + `global/` subtrees)
+        // and a matching re-install flow. See Task 17 findings log.
+        bail!("--all is not yet implemented — export one scope at a time");
     }
 
     let (agentfile_path, lock_path, _scope) = super::agentfile_paths_no_autoinit(scope)?;
     if !agentfile_path.exists() {
         bail!(
-            "no Agentfile found at {} — nothing to export",
+            "no Agentfile at {} — run `agix init` first",
             agentfile_path.display()
         );
     }
