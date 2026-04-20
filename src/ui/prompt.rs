@@ -12,6 +12,7 @@ pub fn pick_clis(preselected: &[String], non_interactive: bool) -> Result<Vec<St
     let all_names: Vec<String> = drivers.iter().map(|d| d.name().to_string()).collect();
 
     if non_interactive || std::env::var("AGIX_NO_INTERACTIVE").is_ok() {
+        let mut out: Vec<String> = Vec::with_capacity(preselected.len());
         for cli in preselected {
             if !all_names.contains(cli) {
                 return Err(AgixError::Other(format!(
@@ -20,8 +21,11 @@ pub fn pick_clis(preselected: &[String], non_interactive: bool) -> Result<Vec<St
                     all_names.join(", ")
                 )));
             }
+            if !out.contains(cli) {
+                out.push(cli.clone());
+            }
         }
-        return Ok(preselected.to_vec());
+        return Ok(out);
     }
 
     let default_selected: Vec<bool> = drivers
@@ -45,4 +49,40 @@ pub fn pick_clis(preselected: &[String], non_interactive: bool) -> Result<Vec<St
         .map_err(|e| AgixError::Other(format!("prompt failed: {e}")))?;
 
     Ok(picked.iter().map(|&i| all_names[i].clone()).collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn non_interactive_empty_preselect_returns_empty() {
+        let out = pick_clis(&[], true).unwrap();
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn non_interactive_passes_through_known_clis() {
+        let out = pick_clis(&["claude".into(), "codex".into()], true).unwrap();
+        assert_eq!(out, vec!["claude".to_string(), "codex".to_string()]);
+    }
+
+    #[test]
+    fn non_interactive_rejects_unknown_cli() {
+        let err = pick_clis(&["bogus".into()], true).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("unknown CLI 'bogus'"), "got: {msg}");
+    }
+
+    #[test]
+    fn non_interactive_deduplicates_preselect() {
+        let out = pick_clis(&["claude".into(), "claude".into(), "codex".into()], true).unwrap();
+        assert_eq!(out, vec!["claude".to_string(), "codex".to_string()]);
+    }
+
+    #[test]
+    fn non_interactive_preserves_order() {
+        let out = pick_clis(&["codex".into(), "claude".into()], true).unwrap();
+        assert_eq!(out, vec!["codex".to_string(), "claude".to_string()]);
+    }
 }
