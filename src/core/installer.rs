@@ -24,7 +24,12 @@ impl Installer {
             let fetch_dir = tmp.path().join(&dep.name);
             std::fs::create_dir_all(&fetch_dir)?;
 
-            let source = parse_source(&dep.source)?;
+            // Wrap parse errors so the failing dep is named in the error message
+            // (bare `parse_source` only mentions the scheme string; the user needs
+            // the dep name to locate the broken entry in their Agentfile).
+            let source = parse_source(&dep.source).map_err(|e| {
+                crate::error::AgixError::InvalidSource(format!("dep '{}': {}", dep.name, e))
+            })?;
             let outcome = source.fetch(&fetch_dir).await?;
 
             match outcome {

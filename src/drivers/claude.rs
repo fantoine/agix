@@ -5,6 +5,21 @@ use std::path::{Path, PathBuf};
 
 pub struct ClaudeDriver;
 
+/// Heuristic: `claude plugin {marketplace add,install}` exits non-zero when
+/// the target is already registered / installed. We inspect the combined
+/// output for known phrases so repeat runs stay idempotent ("silent success
+/// on re-install" per Task 4 review finding).
+///
+/// Matching is case-insensitive and tolerant of wording drift across Claude
+/// Code versions; a small number of recognised phrases is preferred over a
+/// catch-all to avoid swallowing genuine failures.
+fn is_already_exists(stdout: &[u8], stderr: &[u8]) -> bool {
+    let combined = [stdout, stderr].concat();
+    let text = String::from_utf8_lossy(&combined).to_lowercase();
+    const PHRASES: &[&str] = &["already installed", "already exists", "already added"];
+    PHRASES.iter().any(|p| text.contains(p))
+}
+
 fn copy_dir_all(src: &Path, dst: &Path, installed: &mut Vec<InstalledFile>) -> Result<()> {
     std::fs::create_dir_all(dst)?;
     for entry in std::fs::read_dir(src)? {
@@ -151,25 +166,29 @@ impl CliDriver for ClaudeDriver {
         }
 
         // 1. Register the marketplace (idempotent per Claude Code docs).
-        let status = Command::new("claude")
+        let output = Command::new("claude")
             .args(["plugin", "marketplace", "add", marketplace])
-            .status()
+            .output()
             .map_err(|e| AgixError::Other(format!("claude plugin marketplace add failed: {e}")))?;
-        if !status.success() {
+        if !output.status.success() && !is_already_exists(&output.stdout, &output.stderr) {
             return Err(AgixError::Other(format!(
-                "claude plugin marketplace add {marketplace} exited with {status}"
+                "claude plugin marketplace add {marketplace} exited with {}",
+                output.status
             )));
         }
 
         // 2. Install the plugin (Claude's `<plugin>@<marketplace>` syntax).
+        //    Claude exits non-zero when the plugin is already installed; treat
+        //    that as success so repeated `agix install` runs are idempotent.
         let plugin_ref = format!("{plugin}@{marketplace}");
-        let status = Command::new("claude")
+        let output = Command::new("claude")
             .args(["plugin", "install", &plugin_ref])
-            .status()
+            .output()
             .map_err(|e| AgixError::Other(format!("claude plugin install failed: {e}")))?;
-        if !status.success() {
+        if !output.status.success() && !is_already_exists(&output.stdout, &output.stderr) {
             return Err(AgixError::Other(format!(
-                "claude plugin install {plugin_ref} exited with {status}"
+                "claude plugin install {plugin_ref} exited with {}",
+                output.status
             )));
         }
 
@@ -233,6 +252,19 @@ mod tests {
         assert_eq!(files.len(), 1);
         assert!(files[0].dest.contains("skills"));
         assert!(std::path::Path::new(&files[0].dest).exists());
+    }
+
+    #[test]
+    fn is_already_exists_matches_known_phrases() {
+        assert!(is_already_exists(b"", b"Plugin already installed"));
+        assert!(is_already_exists(b"already exists\n", b""));
+        assert!(is_already_exists(b"", b"Marketplace already added"));
+        // Case-insensitive.
+        assert!(is_already_exists(b"", b"ALREADY INSTALLED"));
+        // Negative cases.
+        assert!(!is_already_exists(b"", b"network unreachable"));
+        assert!(!is_already_exists(b"plugin not found", b""));
+        assert!(!is_already_exists(b"", b""));
     }
 
     #[test]
