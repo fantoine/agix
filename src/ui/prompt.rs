@@ -41,12 +41,19 @@ pub fn pick_clis(preselected: &[String], non_interactive: bool) -> Result<Vec<St
         })
         .collect();
 
+    // Inline keybinding hint: dialoguer renders items directly under the prompt
+    // line and doesn't support post-item captions, so we keep the hint adjacent
+    // to the menu by appending it to the prompt itself.
     let picked = dialoguer::MultiSelect::new()
-        .with_prompt("Select CLIs to manage with agix")
+        .with_prompt("Select CLIs to manage with agix (space=toggle, enter=confirm, esc=cancel)")
         .items(&labels)
         .defaults(&default_selected)
-        .interact()
+        .interact_opt()
         .map_err(|e| AgixError::Other(format!("prompt failed: {e}")))?;
+
+    let Some(picked) = picked else {
+        return Err(AgixError::Other("selection cancelled".to_string()));
+    };
 
     Ok(picked.iter().map(|&i| all_names[i].clone()).collect())
 }
