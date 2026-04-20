@@ -1,9 +1,10 @@
+use crate::drivers::Scope;
 use crate::manifest::agentfile::Dependency;
 
 pub async fn run(
     source_type: String,
     source_value: String,
-    scope: &str,
+    scope: Scope,
     cli_filter: Vec<String>,
     version: Option<String>,
 ) -> anyhow::Result<()> {
@@ -80,7 +81,7 @@ pub async fn run(
     }
 
     manifest.to_file(&agentfile_path)?;
-    crate::core::installer::Installer::install_manifest(&manifest, &lock_path, scope).await?;
+    crate::core::installer::Installer::install_manifest(&manifest, &lock_path, &scope).await?;
     crate::output::success(&format!("Added {name}"));
     Ok(())
 }

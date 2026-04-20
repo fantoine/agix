@@ -13,10 +13,7 @@ fn add_marketplace_invokes_claude_cli_for_install() {
     let shim = bin_dir.path().join("claude");
     fs::write(
         &shim,
-        format!(
-            "#!/bin/sh\necho \"$@\" >> {}\nexit 0\n",
-            log_path.display()
-        ),
+        format!("#!/bin/sh\necho \"$@\" >> {}\nexit 0\n", log_path.display()),
     )
     .unwrap();
     fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
@@ -25,7 +22,11 @@ fn add_marketplace_invokes_claude_cli_for_install() {
     let cwd = tempdir().unwrap();
     fs::write(cwd.path().join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
 
-    let path_env = format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
 
     Command::cargo_bin("agix")
         .unwrap()

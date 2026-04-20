@@ -1,5 +1,6 @@
 use agix::core::installer::Installer;
 use agix::core::lock::LockFile;
+use agix::drivers::Scope;
 use agix::manifest::agentfile::ProjectManifest;
 use tempfile::tempdir;
 
@@ -25,7 +26,7 @@ my-pkg = {{ source = "local:{}" }}
     let install_dir = tempdir().unwrap();
     let lock_path = install_dir.path().join("Agentfile.lock");
 
-    Installer::install_manifest(&manifest, &lock_path, "local")
+    Installer::install_manifest(&manifest, &lock_path, &Scope::Local)
         .await
         .unwrap();
 

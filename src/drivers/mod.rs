@@ -5,18 +5,28 @@ use crate::core::lock::InstalledFile;
 use crate::error::Result;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum Scope {
     Global,
     Local,
 }
 
 impl Scope {
-    pub fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             Scope::Global => "global",
             Scope::Local => "local",
         }
+    }
+
+    pub fn is_global(&self) -> bool {
+        matches!(self, Scope::Global)
+    }
+}
+
+impl std::fmt::Display for Scope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 

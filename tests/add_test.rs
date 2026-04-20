@@ -212,7 +212,11 @@ fn step10_add_marketplace_global_scope_auto_inits_non_interactively() {
 
     // Global Agentfile was auto-created.
     let global_agentfile = home.path().join(".agix").join("Agentfile");
-    assert!(global_agentfile.exists(), "expected {:?} to exist", global_agentfile);
+    assert!(
+        global_agentfile.exists(),
+        "expected {:?} to exist",
+        global_agentfile
+    );
     let content = fs::read_to_string(&global_agentfile).unwrap();
     assert!(content.contains("[agix]"));
 }
@@ -284,7 +288,10 @@ fn step13_add_same_local_twice_warns_and_overwrites() {
     let plain = format!("[dependencies.{name}]");
     let quoted = format!("[dependencies.\"{name}\"]");
     let occurrences = content.matches(&plain).count() + content.matches(&quoted).count();
-    assert_eq!(occurrences, 1, "expected 1 entry, got {occurrences}; content: {content}");
+    assert_eq!(
+        occurrences, 1,
+        "expected 1 entry, got {occurrences}; content: {content}"
+    );
 }
 
 #[test]
@@ -304,7 +311,9 @@ fn step13_add_same_cli_scoped_twice_warns_and_overwrites() {
         .args(["--cli", "claude"])
         .assert()
         .success()
-        .stderr(predicates::str::contains("already in [claude.dependencies]"))
+        .stderr(predicates::str::contains(
+            "already in [claude.dependencies]",
+        ))
         .stderr(predicates::str::contains("overwriting"));
 }
 
@@ -428,7 +437,9 @@ fn regression_marketplace_total_failure_returns_nonzero() {
         .args(["add", "marketplace", "org/repo@plugin"])
         .assert()
         .failure()
-        .stderr(predicates::str::contains("failed to install for all target CLIs"));
+        .stderr(predicates::str::contains(
+            "failed to install for all target CLIs",
+        ));
 }
 
 // ---------- Regression: auto-init non-interactive seam ----------

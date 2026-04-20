@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use crate::drivers::Scope;
 use crate::manifest::agentfile::{Dependency, ProjectManifest};
 use crate::sources::parse_source;
 
@@ -17,7 +18,7 @@ use crate::sources::parse_source;
 ///
 /// Unzipping the archive and running `agix install` in the extracted directory
 /// must succeed — nothing should point to the source machine's filesystem.
-pub async fn run(scope: &str, all: bool, output: Option<String>) -> Result<()> {
+pub async fn run(scope: Scope, all: bool, output: Option<String>) -> Result<()> {
     if all {
         bail!("--all is not yet implemented");
     }

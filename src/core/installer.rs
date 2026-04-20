@@ -14,14 +14,8 @@ impl Installer {
     pub async fn install_manifest(
         manifest: &ProjectManifest,
         lock_path: &Path,
-        scope_str: &str,
+        scope: &Scope,
     ) -> Result<()> {
-        let scope = if scope_str == "global" {
-            Scope::Global
-        } else {
-            Scope::Local
-        };
-
         let deps = Resolver::resolve(manifest, &manifest.agix.cli);
         let mut lock = LockFile::from_file_or_default(lock_path);
         let tmp = tempfile::tempdir()?;
@@ -73,7 +67,7 @@ impl Installer {
                         crate::output::info(&format!(
                             "Installing {plugin} from marketplace {marketplace} via {cli_name}..."
                         ));
-                        match driver.install_marketplace_plugin(&marketplace, &plugin, &scope) {
+                        match driver.install_marketplace_plugin(&marketplace, &plugin, scope) {
                             Ok(files) => {
                                 crate::output::success(&format!(
                                     "Plugin '{plugin}' installed for {cli_name}"
@@ -104,7 +98,7 @@ impl Installer {
                         content_hash: None,
                         version: None,
                         cli: dep.cli.clone(),
-                        scope: scope_str.to_owned(),
+                        scope: scope.as_str().to_owned(),
                         files: all_files,
                     });
                     lock.to_file(lock_path)?;
@@ -140,7 +134,7 @@ impl Installer {
                             ));
                             continue;
                         }
-                        let files = driver.install(&dep.name, &fetched, &scope)?;
+                        let files = driver.install(&dep.name, &fetched, scope)?;
                         all_files.extend(files);
                     }
 
@@ -154,7 +148,7 @@ impl Installer {
                         content_hash,
                         version: None,
                         cli: dep.cli.clone(),
-                        scope: scope_str.to_owned(),
+                        scope: scope.as_str().to_owned(),
                         files: all_files,
                     });
                     lock.to_file(lock_path)?;

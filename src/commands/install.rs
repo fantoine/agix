@@ -1,4 +1,6 @@
-pub async fn run(scope: &str) -> anyhow::Result<()> {
+use crate::drivers::Scope;
+
+pub async fn run(scope: Scope) -> anyhow::Result<()> {
     let (agentfile_path, lock_path, scope) = super::agentfile_paths(scope, false)?;
     let manifest = crate::manifest::agentfile::ProjectManifest::from_file(&agentfile_path)?;
 
@@ -13,7 +15,7 @@ pub async fn run(scope: &str) -> anyhow::Result<()> {
         }
     }
 
-    crate::core::installer::Installer::install_manifest(&manifest, &lock_path, scope).await?;
+    crate::core::installer::Installer::install_manifest(&manifest, &lock_path, &scope).await?;
     crate::output::success("Installed");
     Ok(())
 }

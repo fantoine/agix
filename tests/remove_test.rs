@@ -78,9 +78,15 @@ my-pkg = {{ source = "local:{}" }}
         .success();
 
     let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
-    assert!(!content.contains("my-pkg"), "Agentfile should not contain my-pkg");
+    assert!(
+        !content.contains("my-pkg"),
+        "Agentfile should not contain my-pkg"
+    );
     let lock_after = fs::read_to_string(cwd.path().join("Agentfile.lock")).unwrap();
-    assert!(!lock_after.contains("my-pkg"), "lock should not contain my-pkg");
+    assert!(
+        !lock_after.contains("my-pkg"),
+        "lock should not contain my-pkg"
+    );
 }
 
 // ---------- Step 3: remove --cli claude leaves dep in codex section ----------
@@ -121,7 +127,9 @@ my-pkg = {{ source = "local:{0}" }}
     let claude_deps = manifest.cli_dependencies.get("claude");
     let codex_deps = manifest.cli_dependencies.get("codex");
     assert!(
-        claude_deps.map(|m| !m.contains_key("my-pkg")).unwrap_or(true),
+        claude_deps
+            .map(|m| !m.contains_key("my-pkg"))
+            .unwrap_or(true),
         "my-pkg should be gone from claude section"
     );
     assert!(
@@ -135,11 +143,7 @@ my-pkg = {{ source = "local:{0}" }}
 #[tokio::test]
 async fn step4_remove_nonexistent_package_fails_with_clear_error() {
     let (cwd, home, _pkg) = setup_workspace();
-    fs::write(
-        cwd.path().join("Agentfile"),
-        "[agix]\ncli = [\"claude\"]\n",
-    )
-    .unwrap();
+    fs::write(cwd.path().join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
     // Seed an empty lock so we hit "package not found" rather than "no lock".
     fs::write(
         cwd.path().join("Agentfile.lock"),
@@ -185,7 +189,10 @@ my-pkg = {{ source = "local:{}" }}
         .stderr(predicates::str::contains("no lock file"));
 
     let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
-    assert!(!content.contains("my-pkg"), "manifest entry should still be removed");
+    assert!(
+        !content.contains("my-pkg"),
+        "manifest entry should still be removed"
+    );
 }
 
 // ---------- Step 6: remove shared dep installed across multiple CLIs ----------
@@ -228,7 +235,10 @@ my-pkg = {{ source = "local:{}" }}
         "expected claude to have installed a file somewhere"
     );
     // Codex always writes under ~/.codex/agix regardless of scope today.
-    assert!(codex_skill.exists(), "expected codex file at {codex_skill:?}");
+    assert!(
+        codex_skill.exists(),
+        "expected codex file at {codex_skill:?}"
+    );
 
     remove_cmd(cwd.path(), home.path())
         .args(["remove", "my-pkg"])
@@ -242,7 +252,10 @@ my-pkg = {{ source = "local:{}" }}
 
     // Lock has no my-pkg entry.
     let lock = fs::read_to_string(cwd.path().join("Agentfile.lock")).unwrap();
-    assert!(!lock.contains("my-pkg"), "lock should not contain my-pkg: {lock}");
+    assert!(
+        !lock.contains("my-pkg"),
+        "lock should not contain my-pkg: {lock}"
+    );
 
     // Agentfile has no my-pkg entry.
     let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
@@ -286,11 +299,17 @@ my-pkg = {{ source = "local:{}" }}
         .assert()
         .success();
 
-    assert!(!claude_global_skill.exists(), "global file should be removed");
+    assert!(
+        !claude_global_skill.exists(),
+        "global file should be removed"
+    );
 
     let global_lock = global_dir.join("Agentfile.lock");
     let lock = fs::read_to_string(&global_lock).unwrap();
-    assert!(!lock.contains("my-pkg"), "global lock should not contain my-pkg");
+    assert!(
+        !lock.contains("my-pkg"),
+        "global lock should not contain my-pkg"
+    );
 
     let content = fs::read_to_string(global_dir.join("Agentfile")).unwrap();
     assert!(!content.contains("my-pkg"));
@@ -341,7 +360,10 @@ async fn step8_remove_marketplace_plugin_invokes_claude_uninstall() {
 
     // Lock entry gone.
     let lock = fs::read_to_string(cwd.path().join("Agentfile.lock")).unwrap();
-    assert!(!lock.contains("roundtable"), "lock should not contain roundtable: {lock}");
+    assert!(
+        !lock.contains("roundtable"),
+        "lock should not contain roundtable: {lock}"
+    );
 }
 
 // ---------- Regression: mangled lock source falls back to file-based uninstall ----------
@@ -388,7 +410,10 @@ dest = "{}"
         .stderr(predicates::str::contains("lock source unparseable"));
 
     // File was deleted via fallback.
-    assert!(!owned_file.exists(), "tracked file should be removed via fallback");
+    assert!(
+        !owned_file.exists(),
+        "tracked file should be removed via fallback"
+    );
 
     // Lock entry was dropped.
     let lock_after = fs::read_to_string(cwd.path().join("Agentfile.lock")).unwrap();
@@ -432,5 +457,8 @@ my-pkg = {{ source = "local:{}" }}
 
     // Shared dep unchanged (the filter targets the legacy-cli section only).
     let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
-    assert!(content.contains("my-pkg"), "shared dep should remain under [dependencies]");
+    assert!(
+        content.contains("my-pkg"),
+        "shared dep should remain under [dependencies]"
+    );
 }

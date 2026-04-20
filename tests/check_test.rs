@@ -195,9 +195,7 @@ cli = ["not-a-real-cli"]
         .current_dir(&dir)
         .assert()
         .success()
-        .stdout(predicates::str::contains(
-            "project for not-a-real-cli",
-        ))
+        .stdout(predicates::str::contains("project for not-a-real-cli"))
         .stderr(predicates::str::contains("Unknown CLI"))
         .stderr(predicates::str::contains("not-a-real-cli"));
 }

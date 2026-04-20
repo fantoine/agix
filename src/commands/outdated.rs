@@ -1,4 +1,6 @@
-pub async fn run(scope: &str) -> anyhow::Result<()> {
+use crate::drivers::Scope;
+
+pub async fn run(scope: Scope) -> anyhow::Result<()> {
     let (_, lock_path, _) = super::agentfile_paths(scope, false)?;
     let lock = crate::core::lock::LockFile::from_file_or_default(&lock_path);
     if lock.packages.is_empty() {

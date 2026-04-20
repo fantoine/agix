@@ -1,20 +1,6 @@
+use agix::drivers::Scope;
 use anyhow::Result;
-use clap::{Parser, Subcommand, ValueEnum};
-
-#[derive(ValueEnum, Clone, Debug)]
-enum Scope {
-    Global,
-    Local,
-}
-
-impl Scope {
-    fn as_str(&self) -> &'static str {
-        match self {
-            Scope::Global => "global",
-            Scope::Local => "local",
-        }
-    }
-}
+use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(
@@ -95,27 +81,25 @@ async fn main() -> Result<()> {
             scope,
             cli,
             no_interactive,
-        } => agix::commands::init::run(scope.as_str(), cli, no_interactive).await,
-        Commands::Install { scope } => agix::commands::install::run(scope.as_str()).await,
+        } => agix::commands::init::run(scope, cli, no_interactive).await,
+        Commands::Install { scope } => agix::commands::install::run(scope).await,
         Commands::Add {
             source_type,
             source_value,
             scope,
             cli,
             version,
-        } => {
-            agix::commands::add::run(source_type, source_value, scope.as_str(), cli, version).await
-        }
+        } => agix::commands::add::run(source_type, source_value, scope, cli, version).await,
         Commands::Remove { name, scope, cli } => {
-            agix::commands::remove::run(name, scope.as_str(), cli).await
+            agix::commands::remove::run(name, scope, cli).await
         }
-        Commands::Update { name, scope } => agix::commands::update::run(name, scope.as_str()).await,
-        Commands::List { scope } => agix::commands::list::run(scope.as_str()).await,
-        Commands::Outdated { scope } => agix::commands::outdated::run(scope.as_str()).await,
+        Commands::Update { name, scope } => agix::commands::update::run(name, scope).await,
+        Commands::List { scope } => agix::commands::list::run(scope).await,
+        Commands::Outdated { scope } => agix::commands::outdated::run(scope).await,
         Commands::Check => agix::commands::check::run().await,
         Commands::Doctor => agix::commands::doctor::run().await,
         Commands::Export { scope, all, output } => {
-            agix::commands::export::run(scope.as_str(), all, output).await
+            agix::commands::export::run(scope, all, output).await
         }
     }
 }

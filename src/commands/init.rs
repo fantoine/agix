@@ -1,4 +1,6 @@
-pub async fn run(scope: &str, cli: Vec<String>, no_interactive: bool) -> anyhow::Result<()> {
+use crate::drivers::Scope;
+
+pub async fn run(scope: Scope, cli: Vec<String>, no_interactive: bool) -> anyhow::Result<()> {
     let (path, _lock_path, _scope) = super::agentfile_paths_no_autoinit(scope)?;
     if path.exists() {
         crate::output::warn(&format!("Already initialized ({})", path.display()));

@@ -1,4 +1,6 @@
-pub async fn run(name: Option<String>, scope: &str) -> anyhow::Result<()> {
+use crate::drivers::Scope;
+
+pub async fn run(name: Option<String>, scope: Scope) -> anyhow::Result<()> {
     let (agentfile_path, lock_path, scope) = super::agentfile_paths(scope, false)?;
     if !agentfile_path.exists() {
         anyhow::bail!("No Agentfile found.");
@@ -15,7 +17,7 @@ pub async fn run(name: Option<String>, scope: &str) -> anyhow::Result<()> {
         }
     }
 
-    crate::core::installer::Installer::install_manifest(&manifest, &lock_path, scope).await?;
+    crate::core::installer::Installer::install_manifest(&manifest, &lock_path, &scope).await?;
     crate::output::success("Updated");
     Ok(())
 }
