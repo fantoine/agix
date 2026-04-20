@@ -1,4 +1,4 @@
-pub mod claude_code;
+pub mod claude;
 pub mod codex;
 
 use crate::core::lock::InstalledFile;
@@ -55,10 +55,7 @@ pub trait CliDriver: Send + Sync {
 }
 
 pub fn all_drivers() -> Vec<Box<dyn CliDriver>> {
-    vec![
-        Box::new(claude_code::ClaudeCodeDriver),
-        Box::new(codex::CodexDriver),
-    ]
+    vec![Box::new(claude::ClaudeDriver), Box::new(codex::CodexDriver)]
 }
 
 pub fn driver_for(cli_name: &str) -> Option<Box<dyn CliDriver>> {

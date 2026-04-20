@@ -1,8 +1,8 @@
 [agix]
-cli = ["claude-code"]
+cli = ["claude"]
 
 [dependencies]
 claude-later = "github:fantoine/claude-later"
 
-[claude-code.dependencies]
+[claude.dependencies]
 claude-roundtable = "marketplace:fantoine/claude-plugins@roundtable"

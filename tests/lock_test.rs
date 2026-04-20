@@ -13,7 +13,7 @@ fn roundtrip_lock_file() {
         sha: Some("a3f8c12d".to_string()),
         content_hash: None,
         version: None,
-        cli: vec!["claude-code".to_string()],
+        cli: vec!["claude".to_string()],
         scope: "global".to_string(),
         files: vec![InstalledFile {
             dest: "~/.claude/skills/brainstorming".to_string(),
@@ -38,7 +38,7 @@ fn lock_file_find_package() {
         sha: Some("abc123".to_string()),
         content_hash: None,
         version: None,
-        cli: vec!["claude-code".to_string()],
+        cli: vec!["claude".to_string()],
         scope: "local".to_string(),
         files: vec![],
     });

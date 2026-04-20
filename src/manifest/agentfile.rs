@@ -9,7 +9,7 @@ use serde::{de, Deserialize, Deserializer, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AgixSection {
-    /// CLI tools this project / package targets (e.g. ["claude-code", "codex"])
+    /// CLI tools this project / package targets (e.g. ["claude", "codex"])
     #[serde(default)]
     pub cli: Vec<String>,
 
@@ -109,7 +109,7 @@ pub struct Hooks {
 }
 
 // ---------------------------------------------------------------------------
-// CliSection  (the value under a per-CLI key like [claude-code])
+// CliSection  (the value under a per-CLI key like [claude])
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -129,7 +129,7 @@ pub struct ProjectManifest {
     /// Top-level dependencies shared across all CLIs
     pub dependencies: HashMap<String, Dependency>,
 
-    /// Per-CLI dependency sections, e.g. `[claude-code.dependencies]`
+    /// Per-CLI dependency sections, e.g. `[claude.dependencies]`
     /// Keys are the CLI names declared in `agix.cli`.
     pub cli_dependencies: HashMap<String, HashMap<String, Dependency>>,
 }
@@ -195,7 +195,7 @@ impl ProjectManifest {
     /// Produces the canonical Agentfile format:
     ///   [agix]
     ///   [dependencies]
-    ///   [claude-code.dependencies]   ← per-CLI sections
+    ///   [claude.dependencies]   ← per-CLI sections
     ///
     /// This is the string that [`ProjectManifest::to_file`] writes to disk, and
     /// is also the shape that the custom [`Deserialize`] impl expects when

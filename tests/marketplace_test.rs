@@ -12,11 +12,7 @@ fn claude_install_marketplace_plugin_invokes_claude_cli() {
 
     let home = tempdir().unwrap();
     let dir = tempdir().unwrap();
-    std::fs::write(
-        dir.path().join("Agentfile"),
-        "[agix]\ncli = [\"claude-code\"]\n",
-    )
-    .unwrap();
+    std::fs::write(dir.path().join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
 
     Command::cargo_bin("agix")
         .unwrap()

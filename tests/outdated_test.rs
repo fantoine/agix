@@ -23,7 +23,7 @@ fn outdated_shows_local_source_notice() {
 [[package]]
 name = "my-tool"
 source = "local:../my-tool"
-cli = ["claude-code"]
+cli = ["claude"]
 scope = "local"
 files = []
 "#,
@@ -49,7 +49,7 @@ fn outdated_shows_remote_not_implemented_notice() {
 name = "claude-later"
 source = "github:fantoine/claude-later"
 sha = "a1b2c3d"
-cli = ["claude-code"]
+cli = ["claude"]
 scope = "local"
 files = []
 "#,

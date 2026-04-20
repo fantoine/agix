@@ -21,7 +21,7 @@ fn doctor_reports_all_files_present_when_lock_empty() {
         dir.path().join("Agentfile"),
         r#"
 [agix]
-cli = ["claude-code"]
+cli = ["claude"]
 "#,
     )
     .unwrap();
@@ -42,7 +42,7 @@ fn doctor_reports_local_claude_config_when_dot_claude_exists() {
         dir.path().join("Agentfile"),
         r#"
 [agix]
-cli = ["claude-code"]
+cli = ["claude"]
 "#,
     )
     .unwrap();
@@ -64,7 +64,7 @@ fn doctor_reports_no_local_config_when_absent() {
         dir.path().join("Agentfile"),
         r#"
 [agix]
-cli = ["claude-code"]
+cli = ["claude"]
 "#,
     )
     .unwrap();
@@ -75,7 +75,7 @@ cli = ["claude-code"]
         .current_dir(&dir)
         .assert()
         .success()
-        .stdout(predicates::str::contains("claude-code"))
+        .stdout(predicates::str::contains("claude"))
         .stdout(predicates::str::contains("codex"))
         .stdout(predicates::str::contains("no local config"));
 }
@@ -87,7 +87,7 @@ fn doctor_warns_on_missing_installed_file() {
         dir.path().join("Agentfile"),
         r#"
 [agix]
-cli = ["claude-code"]
+cli = ["claude"]
 "#,
     )
     .unwrap();
@@ -98,7 +98,7 @@ cli = ["claude-code"]
 name = "claude-later"
 source = "github:fantoine/claude-later"
 sha = "a1b2c3d"
-cli = ["claude-code"]
+cli = ["claude"]
 scope = "local"
 
 [[package.files]]

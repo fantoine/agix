@@ -3,7 +3,7 @@ use crate::drivers::{CliDriver, FetchedPackage, Scope};
 use crate::error::{AgixError, Result};
 use std::path::{Path, PathBuf};
 
-pub struct ClaudeCodeDriver;
+pub struct ClaudeDriver;
 
 fn copy_dir_all(src: &Path, dst: &Path, installed: &mut Vec<InstalledFile>) -> Result<()> {
     std::fs::create_dir_all(dst)?;
@@ -23,7 +23,7 @@ fn copy_dir_all(src: &Path, dst: &Path, installed: &mut Vec<InstalledFile>) -> R
     Ok(())
 }
 
-impl ClaudeCodeDriver {
+impl ClaudeDriver {
     pub fn install_with_base(
         &self,
         _pkg_name: &str,
@@ -88,9 +88,9 @@ impl ClaudeCodeDriver {
     }
 }
 
-impl CliDriver for ClaudeCodeDriver {
+impl CliDriver for ClaudeDriver {
     fn name(&self) -> &str {
-        "claude-code"
+        "claude"
     }
 
     fn detect(&self) -> bool {
@@ -215,7 +215,7 @@ mod tests {
         std::fs::write(skills_dir.join("my-skill.md"), "# skill").unwrap();
 
         let install_base = tempdir().unwrap();
-        let driver = ClaudeCodeDriver;
+        let driver = ClaudeDriver;
         let fetched = crate::drivers::FetchedPackage {
             path: pkg_dir.path().to_path_buf(),
             sha: Some("abc".to_string()),
@@ -240,7 +240,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let file = dir.path().join("to_remove.md");
         std::fs::write(&file, "content").unwrap();
-        let driver = ClaudeCodeDriver;
+        let driver = ClaudeDriver;
         driver
             .uninstall(&[crate::core::lock::InstalledFile {
                 dest: file.to_str().unwrap().to_owned(),

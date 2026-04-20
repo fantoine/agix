@@ -9,7 +9,7 @@ fn check_valid_project_manifest() {
         dir.path().join("Agentfile"),
         r#"
 [agix]
-cli = ["claude-code"]
+cli = ["claude"]
 
 [dependencies]
 claude-later = "github:fantoine/claude-later"
@@ -23,7 +23,7 @@ claude-later = "github:fantoine/claude-later"
         .current_dir(&dir)
         .assert()
         .success()
-        .stdout(predicates::str::contains("project for claude-code"));
+        .stdout(predicates::str::contains("project for claude"));
 }
 
 #[test]
@@ -35,7 +35,7 @@ fn check_valid_package_manifest() {
 [agix]
 name = "my-pkg"
 version = "1.0.0"
-cli = ["claude-code"]
+cli = ["claude"]
 "#,
     )
     .unwrap();
@@ -57,7 +57,7 @@ fn check_package_missing_version_fails() {
         r#"
 [agix]
 name = "my-pkg"
-cli = ["claude-code"]
+cli = ["claude"]
 "#,
     )
     .unwrap();

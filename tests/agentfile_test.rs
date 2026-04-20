@@ -4,21 +4,21 @@ use agix::manifest::agentfile::{PackageManifest, ProjectManifest};
 fn parse_project_manifest() {
     let toml = r#"
 [agix]
-cli = ["claude-code", "codex"]
+cli = ["claude", "codex"]
 
 [dependencies]
 rtk = { source = "github:org/rtk", exclude = ["codex"] }
 
-[claude-code.dependencies]
+[claude.dependencies]
 superpowers = { source = "github:claude-plugins-official/superpowers", version = "^2.0" }
 "#;
     let manifest: ProjectManifest = toml::from_str(toml).unwrap();
-    assert_eq!(manifest.agix.cli, vec!["claude-code", "codex"]);
+    assert_eq!(manifest.agix.cli, vec!["claude", "codex"]);
     assert!(manifest.dependencies.contains_key("rtk"));
     let rtk = &manifest.dependencies["rtk"];
     assert_eq!(rtk.source, "github:org/rtk");
     assert_eq!(rtk.exclude, Some(vec!["codex".to_string()]));
-    let claude_deps = manifest.cli_dependencies.get("claude-code").unwrap();
+    let claude_deps = manifest.cli_dependencies.get("claude").unwrap();
     assert!(claude_deps.contains_key("superpowers"));
 }
 
@@ -29,7 +29,7 @@ fn parse_package_manifest() {
 name = "superpowers"
 version = "2.1.0"
 description = "Supercharge your Claude Code workflow"
-cli = ["claude-code"]
+cli = ["claude"]
 
 [hooks]
 post-install = "scripts/setup.sh"
@@ -51,9 +51,9 @@ dep-a = { source = "github:org/dep-a" }
 fn parse_minimal_project_manifest() {
     let toml = r#"
 [agix]
-cli = ["claude-code"]
+cli = ["claude"]
 "#;
     let manifest: ProjectManifest = toml::from_str(toml).unwrap();
-    assert_eq!(manifest.agix.cli, vec!["claude-code"]);
+    assert_eq!(manifest.agix.cli, vec!["claude"]);
     assert!(manifest.dependencies.is_empty());
 }
