@@ -155,8 +155,8 @@ impl Source for GitHubSource {
 
             // Strip the first path component (the GitHub-added prefix, e.g. "repo-abc1234/")
             let stripped = raw_name
-                .splitn(2, '/')
-                .nth(1)
+                .split_once('/')
+                .map(|x| x.1)
                 .unwrap_or("")
                 .trim_end_matches('/');
 

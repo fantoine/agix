@@ -114,7 +114,13 @@ impl Installer {
                         content_hash,
                     };
 
-                    // Install via each target driver.
+                    // Install via each target driver. File-based installs do
+                    // not require the CLI to be present on the host: we write
+                    // into the scope's target directory (e.g. `./.claude/` for
+                    // local, `~/.claude/` for global) so honouring the manifest
+                    // declaration is always safe. We still surface a notice
+                    // when the CLI is absent so the user knows the files won't
+                    // be picked up until it is installed.
                     let mut all_files: Vec<InstalledFile> = Vec::new();
                     for cli_name in &dep.cli {
                         let driver = match driver_for(cli_name) {
@@ -129,10 +135,9 @@ impl Installer {
                         };
                         if !driver.detect() {
                             crate::output::warn(&format!(
-                                "CLI '{}' not detected, skipping install of '{}'",
-                                cli_name, dep.name
+                                "CLI '{}' not detected — installing '{}' anyway; files will be picked up once '{}' is installed",
+                                cli_name, dep.name, cli_name
                             ));
-                            continue;
                         }
                         let files = driver.install(&dep.name, &fetched, scope)?;
                         all_files.extend(files);
