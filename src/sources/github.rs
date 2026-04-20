@@ -35,6 +35,28 @@ impl GitHubSource {
         }
     }
 
+    /// Like [`GitHubSource::new`], but lets a caller override the GitHub API
+    /// base URL. Used by `outdated` so integration tests can redirect HTTP
+    /// calls to a mockito server without having to wire a full env-var seam
+    /// through the CLI (that refactor is tracked as a deferred finding).
+    ///
+    /// Passing `None` is equivalent to [`GitHubSource::new`].
+    pub fn new_with_optional_base(
+        org: &str,
+        repo: &str,
+        ref_str: Option<&str>,
+        base: Option<&str>,
+    ) -> Self {
+        Self {
+            org: org.to_owned(),
+            repo: repo.to_owned(),
+            ref_str: ref_str.map(str::to_owned),
+            api_base: base
+                .map(str::to_owned)
+                .unwrap_or_else(|| "https://api.github.com".to_owned()),
+        }
+    }
+
     pub fn parse_org_repo(s: &str) -> Result<(String, String)> {
         let (org, repo) = s
             .split_once('/')
