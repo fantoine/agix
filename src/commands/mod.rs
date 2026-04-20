@@ -30,11 +30,19 @@ pub fn agentfile_paths_no_autoinit(
 
 /// Return agentfile/lock paths, auto-creating the global Agentfile if missing
 /// (with an interactive CLI pick). Used by `add`, `install`, etc.
-pub fn agentfile_paths(scope: &str) -> anyhow::Result<(PathBuf, PathBuf, &'static str)> {
+///
+/// `non_interactive` is forwarded to the CLI picker so callers running in
+/// non-interactive contexts don't block on a TTY prompt during the first-time
+/// global setup. `AGIX_NO_INTERACTIVE=1` also still forces non-interactive
+/// (checked inside `pick_clis`).
+pub fn agentfile_paths(
+    scope: &str,
+    non_interactive: bool,
+) -> anyhow::Result<(PathBuf, PathBuf, &'static str)> {
     let (agentfile, lock, scope_s) = agentfile_paths_no_autoinit(scope)?;
     if scope == "global" && !agentfile.exists() {
         crate::output::info("No global Agentfile — running first-time setup");
-        let picks = crate::ui::prompt::pick_clis(&[], false)?;
+        let picks = crate::ui::prompt::pick_clis(&[], non_interactive)?;
         crate::manifest::agentfile::ProjectManifest::empty(picks).to_file(&agentfile)?;
     }
     Ok((agentfile, lock, scope_s))

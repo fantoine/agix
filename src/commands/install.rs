@@ -1,5 +1,5 @@
 pub async fn run(scope: &str) -> anyhow::Result<()> {
-    let (agentfile_path, lock_path, scope) = super::agentfile_paths(scope)?;
+    let (agentfile_path, lock_path, scope) = super::agentfile_paths(scope, false)?;
     let manifest = crate::manifest::agentfile::ProjectManifest::from_file(&agentfile_path)?;
 
     for cli in &manifest.agix.cli {

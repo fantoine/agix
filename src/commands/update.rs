@@ -1,5 +1,5 @@
 pub async fn run(name: Option<String>, scope: &str) -> anyhow::Result<()> {
-    let (agentfile_path, lock_path, scope) = super::agentfile_paths(scope)?;
+    let (agentfile_path, lock_path, scope) = super::agentfile_paths(scope, false)?;
     if !agentfile_path.exists() {
         anyhow::bail!("No Agentfile found.");
     }

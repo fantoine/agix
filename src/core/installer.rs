@@ -49,6 +49,7 @@ impl Installer {
                     };
 
                     let mut all_files: Vec<InstalledFile> = Vec::new();
+                    let mut success_count = 0usize;
                     for cli_name in &target_clis {
                         let driver = match driver_for(cli_name) {
                             Some(d) => d,
@@ -78,11 +79,22 @@ impl Installer {
                                     "Plugin '{plugin}' installed for {cli_name}"
                                 ));
                                 all_files.extend(files);
+                                success_count += 1;
                             }
                             Err(e) => {
                                 crate::output::warn(&format!("install failed for {cli_name}: {e}"));
                             }
                         }
+                    }
+
+                    // If targets were requested but none succeeded, fail the
+                    // command so CI pipelines can detect it. If target_clis is
+                    // empty (nothing detected), that's already surfaced as
+                    // warnings and we preserve the historical Ok path.
+                    if !target_clis.is_empty() && success_count == 0 {
+                        return Err(crate::error::AgixError::Other(format!(
+                            "marketplace plugin '{plugin}' from '{marketplace}' failed to install for all target CLIs"
+                        )));
                     }
 
                     lock.upsert(LockedPackage {

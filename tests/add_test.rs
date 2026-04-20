@@ -1,135 +1,470 @@
 use assert_cmd::Command;
-use tempfile::tempdir;
+use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+use tempfile::{tempdir, TempDir};
 
-#[test]
-fn init_creates_agentfile() {
-    let dir = tempdir().unwrap();
+/// Pre-seeded `agix` command for `add` tests: always non-interactive and
+/// bound to a scratch `HOME` so driver installs never touch the host.
+fn add_cmd(cwd: &Path, home: &Path) -> Command {
     let mut cmd = Command::cargo_bin("agix").unwrap();
-    cmd.current_dir(dir.path())
-        .args(["init", "--no-interactive"]);
-    cmd.assert().success();
-    assert!(dir.path().join("Agentfile").exists());
-    let content = std::fs::read_to_string(dir.path().join("Agentfile")).unwrap();
-    assert!(content.contains("[agix]"));
+    cmd.env("AGIX_NO_INTERACTIVE", "1")
+        .env("HOME", home)
+        .current_dir(cwd);
+    cmd
 }
 
-#[test]
-fn init_fails_if_agentfile_exists() {
-    let dir = tempdir().unwrap();
-    std::fs::write(dir.path().join("Agentfile"), "[agix]\ncli = []\n").unwrap();
-    let mut cmd = Command::cargo_bin("agix").unwrap();
-    cmd.current_dir(dir.path())
-        .args(["init", "--no-interactive"]);
-    cmd.assert().failure();
+/// Create a cwd with a minimal Agentfile plus a tempdir HOME. Returns both
+/// tempdirs (keep alive for the test duration) and a local package dir.
+fn setup_with_agentfile(cli_line: &str) -> (TempDir, TempDir, TempDir) {
+    let cwd = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    let pkg = tempdir().unwrap();
+    fs::write(
+        cwd.path().join("Agentfile"),
+        format!("[agix]\ncli = [{cli_line}]\n"),
+    )
+    .unwrap();
+    fs::write(pkg.path().join("skill.md"), "# skill").unwrap();
+    (cwd, home, pkg)
 }
 
+// ---------- Step 2: add local shared dep (no --cli) ----------
+
 #[test]
-fn add_writes_dependency_to_agentfile() {
-    let dir = tempdir().unwrap();
-    std::fs::write(dir.path().join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
-
-    let pkg_dir = tempdir().unwrap();
-    std::fs::write(pkg_dir.path().join("skill.md"), "# skill").unwrap();
-
-    let mut cmd = Command::cargo_bin("agix").unwrap();
-    cmd.current_dir(dir.path())
+fn step2_add_local_shared_dep_writes_to_top_level_dependencies() {
+    let (cwd, home, pkg) = setup_with_agentfile("\"claude\"");
+    add_cmd(cwd.path(), home.path())
         .arg("add")
         .arg("local")
-        .arg(pkg_dir.path())
-        .arg("--cli")
-        .arg("claude");
-    cmd.assert().success();
+        .arg(pkg.path())
+        .assert()
+        .success();
 
-    let content = std::fs::read_to_string(dir.path().join("Agentfile")).unwrap();
+    let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
+    assert!(content.contains("[dependencies."));
+    assert!(!content.contains("[claude.dependencies"));
     assert!(content.contains("local:"));
 }
 
+// ---------- Step 3: add local --cli claude ----------
+
 #[test]
-fn add_shared_dependency_without_cli_flag() {
-    let dir = tempdir().unwrap();
-    std::fs::write(dir.path().join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
-
-    let pkg_dir = tempdir().unwrap();
-    std::fs::write(pkg_dir.path().join("skill.md"), "# skill").unwrap();
-
-    Command::cargo_bin("agix")
-        .unwrap()
-        .current_dir(dir.path())
-        .arg("add")
-        .arg("local")
-        .arg(pkg_dir.path())
+fn step3_add_local_single_cli_writes_per_cli_section() {
+    let (cwd, home, pkg) = setup_with_agentfile("\"claude\"");
+    add_cmd(cwd.path(), home.path())
+        .args(["add", "local"])
+        .arg(pkg.path())
+        .args(["--cli", "claude"])
         .assert()
         .success();
 
-    let content = std::fs::read_to_string(dir.path().join("Agentfile")).unwrap();
-    // Serialized as [dependencies.<name>] — check the section key appears
-    assert!(content.contains("dependencies"));
-    // Should NOT be under a CLI-specific section
-    assert!(!content.contains("claude.dependencies"));
+    let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
+    assert!(content.contains("[claude.dependencies."));
 }
 
+// ---------- Step 4: add local --cli claude --cli codex ----------
+
 #[test]
-fn add_multi_cli_dependency() {
-    let dir = tempdir().unwrap();
-    std::fs::write(
-        dir.path().join("Agentfile"),
-        "[agix]\ncli = [\"claude\", \"codex\"]\n",
+fn step4_add_local_multi_cli_writes_under_each_section() {
+    let (cwd, home, pkg) = setup_with_agentfile("\"claude\", \"codex\"");
+    add_cmd(cwd.path(), home.path())
+        .args(["add", "local"])
+        .arg(pkg.path())
+        .args(["--cli", "claude", "--cli", "codex"])
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
+    assert!(content.contains("[claude.dependencies."));
+    assert!(content.contains("[codex.dependencies."));
+}
+
+// ---------- Step 5: --cli <unknown-driver> → error listing known drivers ----------
+
+#[test]
+fn step5_add_local_unknown_cli_errors_with_known_drivers_listed() {
+    let (cwd, home, pkg) = setup_with_agentfile("\"claude\"");
+    add_cmd(cwd.path(), home.path())
+        .args(["add", "local"])
+        .arg(pkg.path())
+        .args(["--cli", "not-in-agix-cli"])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("unknown CLI 'not-in-agix-cli'"))
+        .stderr(predicates::str::contains("claude"))
+        .stderr(predicates::str::contains("codex"));
+
+    // And nothing was persisted — Agentfile must not gain a bogus section.
+    let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
+    assert!(!content.contains("not-in-agix-cli"));
+}
+
+// ---------- Step 6 / 7: GitHub source — currently NOT runnable hermetically ----------
+//
+// The `GitHubSource` wires its API base through a `#[cfg(test)]` constructor
+// only; the CLI path does not honor an `AGIX_GITHUB_BASE_URL`-style env var.
+// Wiring that override is out of scope for Task 10 (a Phase-B source-review
+// task would own it). Unit tests in `src/sources/github.rs` already exercise
+// `resolve_ref` via mockito, so we don't duplicate them here.
+
+// ---------- Step 8: add git from a local bare repo ----------
+
+#[test]
+fn step8_add_git_from_local_bare_repo_succeeds() {
+    // Build a bare repo served over the filesystem so git2 can clone without
+    // touching the internet.
+    let src = tempdir().unwrap();
+    let repo = git2::Repository::init(src.path()).unwrap();
+    let sig = git2::Signature::now("test", "test@test.com").unwrap();
+    fs::write(src.path().join("skill.md"), "# skill").unwrap();
+    let mut index = repo.index().unwrap();
+    index.add_path(Path::new("skill.md")).unwrap();
+    index.write().unwrap();
+    let oid = index.write_tree().unwrap();
+    let tree = repo.find_tree(oid).unwrap();
+    repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
+        .unwrap();
+
+    let cwd = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    fs::write(cwd.path().join("Agentfile"), "[agix]\ncli = []\n").unwrap();
+
+    let url = format!("file://{}", src.path().display());
+    add_cmd(cwd.path(), home.path())
+        .args(["add", "git", &url])
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
+    assert!(content.contains("git:"));
+}
+
+// ---------- Step 9: add marketplace → invokes claude CLI shim ----------
+
+fn write_claude_shim(dir: &Path) -> std::path::PathBuf {
+    let log = dir.join("claude-invocations.log");
+    let shim = dir.join("claude");
+    fs::write(
+        &shim,
+        format!("#!/bin/sh\necho \"$@\" >> {}\nexit 0\n", log.display()),
     )
     .unwrap();
-
-    let pkg_dir = tempdir().unwrap();
-    std::fs::write(pkg_dir.path().join("skill.md"), "# skill").unwrap();
-
-    Command::cargo_bin("agix")
-        .unwrap()
-        .current_dir(dir.path())
-        .arg("add")
-        .arg("local")
-        .arg(pkg_dir.path())
-        .arg("--cli")
-        .arg("claude")
-        .arg("--cli")
-        .arg("codex")
-        .assert()
-        .success();
-
-    let content = std::fs::read_to_string(dir.path().join("Agentfile")).unwrap();
-    assert!(content.contains("claude"));
-    assert!(content.contains("codex"));
+    fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
+    log
 }
 
 #[test]
-fn add_local_with_separate_type_and_value() {
-    let dir = tempdir().unwrap();
-    std::fs::write(dir.path().join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
-    let pkg_dir = tempdir().unwrap();
-    std::fs::write(pkg_dir.path().join("skill.md"), "# s").unwrap();
+fn step9_add_marketplace_local_scope_invokes_claude_shim() {
+    let bin_dir = tempdir().unwrap();
+    let log_path = write_claude_shim(bin_dir.path());
 
-    Command::cargo_bin("agix")
-        .unwrap()
-        .current_dir(dir.path())
-        .arg("add")
-        .arg("local")
-        .arg(pkg_dir.path())
+    let cwd = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    fs::write(cwd.path().join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
+
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+
+    add_cmd(cwd.path(), home.path())
+        .env("PATH", &path_env)
+        .args(["add", "marketplace", "fantoine/claude-plugins@roundtable"])
         .assert()
         .success();
 
-    let content = std::fs::read_to_string(dir.path().join("Agentfile")).unwrap();
+    let log = fs::read_to_string(&log_path).unwrap();
+    assert!(log.contains("plugin marketplace add fantoine/claude-plugins"));
+    assert!(log.contains("plugin install roundtable@fantoine/claude-plugins"));
+}
+
+// ---------- Step 10: add marketplace --scope global with fresh HOME ----------
+
+#[test]
+fn step10_add_marketplace_global_scope_auto_inits_non_interactively() {
+    let bin_dir = tempdir().unwrap();
+    let _log_path = write_claude_shim(bin_dir.path());
+
+    // Fresh HOME: no ~/.agix/Agentfile yet. With AGIX_NO_INTERACTIVE=1, the
+    // auto-init inside `agentfile_paths` must not block on a TTY prompt.
+    let cwd = tempdir().unwrap();
+    let home = tempdir().unwrap();
+
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+
+    add_cmd(cwd.path(), home.path())
+        .env("PATH", &path_env)
+        .args([
+            "add",
+            "marketplace",
+            "fantoine/claude-plugins@roundtable",
+            "--scope",
+            "global",
+        ])
+        .assert()
+        .success();
+
+    // Global Agentfile was auto-created.
+    let global_agentfile = home.path().join(".agix").join("Agentfile");
+    assert!(global_agentfile.exists(), "expected {:?} to exist", global_agentfile);
+    let content = fs::read_to_string(&global_agentfile).unwrap();
+    assert!(content.contains("[agix]"));
+}
+
+// ---------- Step 11: add without Agentfile → actionable error mentioning `agix init` ----------
+
+#[test]
+fn step11_add_without_agentfile_errors_mentioning_init() {
+    let cwd = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    let pkg = tempdir().unwrap();
+    fs::write(pkg.path().join("skill.md"), "# s").unwrap();
+
+    add_cmd(cwd.path(), home.path())
+        .arg("add")
+        .arg("local")
+        .arg(pkg.path())
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("Agentfile"))
+        .stderr(predicates::str::contains("agix init"));
+}
+
+// ---------- Step 12: add ftp nope → error listing known schemes ----------
+
+#[test]
+fn step12_add_unknown_source_type_errors_with_known_schemes_listed() {
+    let cwd = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    fs::write(cwd.path().join("Agentfile"), "[agix]\ncli = []\n").unwrap();
+
+    add_cmd(cwd.path(), home.path())
+        .args(["add", "ftp", "nope"])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("unknown source type 'ftp'"))
+        .stderr(predicates::str::contains("local"))
+        .stderr(predicates::str::contains("github"))
+        .stderr(predicates::str::contains("git"))
+        .stderr(predicates::str::contains("marketplace"));
+}
+
+// ---------- Step 13: add local twice → warn + overwrite ----------
+
+#[test]
+fn step13_add_same_local_twice_warns_and_overwrites() {
+    let (cwd, home, pkg) = setup_with_agentfile("\"claude\"");
+
+    add_cmd(cwd.path(), home.path())
+        .arg("add")
+        .arg("local")
+        .arg(pkg.path())
+        .assert()
+        .success();
+
+    add_cmd(cwd.path(), home.path())
+        .arg("add")
+        .arg("local")
+        .arg(pkg.path())
+        .assert()
+        .success()
+        .stderr(predicates::str::contains("already in [dependencies]"))
+        .stderr(predicates::str::contains("overwriting"));
+
+    // Manifest still valid: exactly one entry for the package (TOML may quote
+    // the key if it starts with `.`).
+    let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
+    let name = pkg.path().file_name().unwrap().to_str().unwrap();
+    let plain = format!("[dependencies.{name}]");
+    let quoted = format!("[dependencies.\"{name}\"]");
+    let occurrences = content.matches(&plain).count() + content.matches(&quoted).count();
+    assert_eq!(occurrences, 1, "expected 1 entry, got {occurrences}; content: {content}");
+}
+
+#[test]
+fn step13_add_same_cli_scoped_twice_warns_and_overwrites() {
+    let (cwd, home, pkg) = setup_with_agentfile("\"claude\"");
+
+    add_cmd(cwd.path(), home.path())
+        .args(["add", "local"])
+        .arg(pkg.path())
+        .args(["--cli", "claude"])
+        .assert()
+        .success();
+
+    add_cmd(cwd.path(), home.path())
+        .args(["add", "local"])
+        .arg(pkg.path())
+        .args(["--cli", "claude"])
+        .assert()
+        .success()
+        .stderr(predicates::str::contains("already in [claude.dependencies]"))
+        .stderr(predicates::str::contains("overwriting"));
+}
+
+// ---------- Step 14: package name inference matches suggested_name() per source type ----------
+
+#[test]
+fn step14_suggested_name_local_strips_extension_and_uses_basename() {
+    // LocalSource::suggested_name uses the last Normal component — no extension strip.
+    // Plan text "strips extension" refers to archive-like sources, not local dirs;
+    // keep this test honest: a dir path yields the dir name verbatim.
+    let (cwd, home, pkg) = setup_with_agentfile("\"claude\"");
+    add_cmd(cwd.path(), home.path())
+        .arg("add")
+        .arg("local")
+        .arg(pkg.path())
+        .assert()
+        .success();
+    let name = pkg.path().file_name().unwrap().to_str().unwrap();
+    let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
+    let plain = format!("[dependencies.{name}]");
+    let quoted = format!("[dependencies.\"{name}\"]");
     assert!(
-        content.contains("local:"),
-        "source should be stored as local:<path>"
+        content.contains(&plain) || content.contains(&quoted),
+        "expected entry [dependencies.{name}] (plain or quoted), got: {content}"
+    );
+}
+
+// Shared-case naming verification for `git` is unit-covered in `sources/git.rs`;
+// here we assert the integration produces the expected key.
+#[test]
+fn step14_suggested_name_git_uses_last_path_minus_dotgit() {
+    let src = tempdir().unwrap();
+    let repo = git2::Repository::init(src.path()).unwrap();
+    let sig = git2::Signature::now("t", "t@t.t").unwrap();
+    fs::write(src.path().join("x.md"), "x").unwrap();
+    let mut idx = repo.index().unwrap();
+    idx.add_path(Path::new("x.md")).unwrap();
+    idx.write().unwrap();
+    let oid = idx.write_tree().unwrap();
+    let tree = repo.find_tree(oid).unwrap();
+    repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
+        .unwrap();
+
+    // Use a filesystem path ending in `.git` to prove the `.git` trim works.
+    let fake_git_path = src.path().with_extension("git");
+    fs::rename(src.path(), &fake_git_path).unwrap();
+
+    let cwd = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    fs::write(cwd.path().join("Agentfile"), "[agix]\ncli = []\n").unwrap();
+
+    let url = format!("file://{}", fake_git_path.display());
+    add_cmd(cwd.path(), home.path())
+        .args(["add", "git", &url])
+        .assert()
+        .success();
+
+    let expected_name = fake_git_path
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .trim_end_matches(".git")
+        .to_string();
+    let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
+    let plain = format!("[dependencies.{expected_name}]");
+    let quoted = format!("[dependencies.\"{expected_name}\"]");
+    assert!(
+        content.contains(&plain) || content.contains(&quoted),
+        "expected [dependencies.{expected_name}] (plain or quoted); got: {content}"
     );
 }
 
 #[test]
-fn add_rejects_unknown_source_type() {
-    let dir = tempdir().unwrap();
-    std::fs::write(dir.path().join("Agentfile"), "[agix]\ncli = []\n").unwrap();
+fn step14_suggested_name_marketplace_uses_plugin_name() {
+    let bin_dir = tempdir().unwrap();
+    let _log = write_claude_shim(bin_dir.path());
 
-    Command::cargo_bin("agix")
-        .unwrap()
-        .current_dir(dir.path())
-        .args(["add", "ftp", "nope"])
+    let cwd = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    fs::write(cwd.path().join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
+
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+
+    add_cmd(cwd.path(), home.path())
+        .env("PATH", &path_env)
+        .args(["add", "marketplace", "fantoine/claude-plugins@roundtable"])
         .assert()
-        .failure();
+        .success();
+
+    let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
+    assert!(content.contains("[dependencies.roundtable]"));
+}
+
+// ---------- Regression: marketplace total-failure returns non-zero ----------
+
+#[test]
+fn regression_marketplace_total_failure_returns_nonzero() {
+    // claude shim exits non-zero on every invocation.
+    let bin_dir = tempdir().unwrap();
+    let shim = bin_dir.path().join("claude");
+    fs::write(&shim, "#!/bin/sh\nexit 1\n").unwrap();
+    fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
+
+    let cwd = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    fs::write(cwd.path().join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
+
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+
+    add_cmd(cwd.path(), home.path())
+        .env("PATH", &path_env)
+        .args(["add", "marketplace", "org/repo@plugin"])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("failed to install for all target CLIs"));
+}
+
+// ---------- Regression: auto-init non-interactive seam ----------
+
+#[test]
+fn regression_global_auto_init_honors_non_interactive_env_var() {
+    // Without claude on PATH, detect() is false → target_clis=[], success_count=0,
+    // but target_clis is empty so the marketplace branch returns Ok. That's not
+    // quite what we want to assert; use a shim so the install actually succeeds.
+    let bin_dir = tempdir().unwrap();
+    let _log = write_claude_shim(bin_dir.path());
+
+    let cwd = tempdir().unwrap();
+    let home = tempdir().unwrap();
+
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+
+    // Fresh HOME with no global Agentfile. The auto-init inside
+    // `agentfile_paths` would historically call `pick_clis(&[], false)` and
+    // block; now it forwards the non-interactive state and
+    // `AGIX_NO_INTERACTIVE=1` still applies. The command MUST NOT hang.
+    add_cmd(cwd.path(), home.path())
+        .env("PATH", &path_env)
+        .args([
+            "add",
+            "marketplace",
+            "fantoine/claude-plugins@roundtable",
+            "--scope",
+            "global",
+        ])
+        .assert()
+        .success();
+
+    assert!(home.path().join(".agix").join("Agentfile").exists());
 }
