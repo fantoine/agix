@@ -176,9 +176,31 @@ impl Installer {
             }
         };
 
-        let source = parse_source(&pkg.source)?;
         let cli_names = pkg.cli.clone();
         let files = pkg.files.clone();
+
+        // Parse the lock's `source` string to decide marketplace vs file-based
+        // uninstall. If the source is mangled (hand-edited, older format, …)
+        // fall back to file-based uninstall so the user can still clean up.
+        // Marketplace-managed plugins in that degraded path may need manual
+        // cleanup via the CLI itself — we warn explicitly.
+        let marketplace_route = match parse_source(&pkg.source) {
+            Ok(source) => source
+                .as_marketplace()
+                .map(|(m, p)| (m.to_string(), p.to_string())),
+            Err(e) => {
+                crate::output::warn(&format!(
+                    "lock source unparseable for '{name}': {e}; falling back to file-based uninstall"
+                ));
+                if files.is_empty() {
+                    crate::output::warn(&format!(
+                        "no tracked files for '{name}' — if this was a marketplace plugin, \
+                         uninstall it manually via the relevant CLI"
+                    ));
+                }
+                None
+            }
+        };
 
         for cli_name in &cli_names {
             let driver = match driver_for(cli_name) {
@@ -191,7 +213,7 @@ impl Installer {
                     continue;
                 }
             };
-            if let Some((marketplace, plugin)) = source.as_marketplace() {
+            if let Some((marketplace, plugin)) = &marketplace_route {
                 if let Err(e) = driver.uninstall_marketplace_plugin(marketplace, plugin) {
                     crate::output::warn(&format!(
                         "marketplace uninstall failed for {cli_name}: {e}"
