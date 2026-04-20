@@ -1,5 +1,6 @@
-use assert_cmd::Command;
 use tempfile::tempdir;
+
+mod helpers;
 
 #[test]
 fn global_scope_auto_inits_agentfile_if_missing() {
@@ -7,10 +8,7 @@ fn global_scope_auto_inits_agentfile_if_missing() {
     let pkg_dir = tempdir().unwrap();
     std::fs::write(pkg_dir.path().join("skill.md"), "# skill").unwrap();
 
-    Command::cargo_bin("agix")
-        .unwrap()
-        .env("HOME", fake_home.path())
-        .env("AGIX_NO_INTERACTIVE", "1")
+    helpers::cmd_non_interactive(fake_home.path())
         .arg("add")
         .arg("local")
         .arg(pkg_dir.path())
@@ -25,9 +23,9 @@ fn global_scope_auto_inits_agentfile_if_missing() {
 #[test]
 fn init_creates_agentfile() {
     let dir = tempdir().unwrap();
+    let home = tempdir().unwrap();
 
-    Command::cargo_bin("agix")
-        .unwrap()
+    helpers::cmd_non_interactive(home.path())
         .args(["init", "--no-interactive"])
         .current_dir(&dir)
         .assert()
@@ -40,10 +38,10 @@ fn init_creates_agentfile() {
 #[test]
 fn init_fails_if_already_initialized() {
     let dir = tempdir().unwrap();
+    let home = tempdir().unwrap();
     std::fs::write(dir.path().join("Agentfile"), "[agix]\ncli = []\n").unwrap();
 
-    Command::cargo_bin("agix")
-        .unwrap()
+    helpers::cmd_non_interactive(home.path())
         .args(["init", "--no-interactive"])
         .current_dir(&dir)
         .assert()
@@ -54,9 +52,9 @@ fn init_fails_if_already_initialized() {
 #[test]
 fn init_with_preselected_clis_writes_them_to_agentfile() {
     let dir = tempdir().unwrap();
+    let home = tempdir().unwrap();
 
-    Command::cargo_bin("agix")
-        .unwrap()
+    helpers::cmd_non_interactive(home.path())
         .args([
             "init",
             "--no-interactive",
@@ -77,9 +75,9 @@ fn init_with_preselected_clis_writes_them_to_agentfile() {
 #[test]
 fn init_deduplicates_repeated_cli_flags() {
     let dir = tempdir().unwrap();
+    let home = tempdir().unwrap();
 
-    Command::cargo_bin("agix")
-        .unwrap()
+    helpers::cmd_non_interactive(home.path())
         .args([
             "init",
             "--no-interactive",
@@ -101,9 +99,7 @@ fn init_deduplicates_repeated_cli_flags() {
 fn init_global_scope_creates_home_agentfile() {
     let fake_home = tempdir().unwrap();
 
-    Command::cargo_bin("agix")
-        .unwrap()
-        .env("HOME", fake_home.path())
+    helpers::cmd_non_interactive(fake_home.path())
         .args([
             "init",
             "--scope",
@@ -128,9 +124,7 @@ fn init_global_scope_fails_if_already_initialized() {
     std::fs::create_dir_all(&agix_dir).unwrap();
     std::fs::write(agix_dir.join("Agentfile"), "[agix]\ncli = []\n").unwrap();
 
-    Command::cargo_bin("agix")
-        .unwrap()
-        .env("HOME", fake_home.path())
+    helpers::cmd_non_interactive(fake_home.path())
         .args(["init", "--scope", "global", "--no-interactive"])
         .assert()
         .failure()
@@ -140,9 +134,9 @@ fn init_global_scope_fails_if_already_initialized() {
 #[test]
 fn init_rejects_unknown_cli() {
     let dir = tempdir().unwrap();
+    let home = tempdir().unwrap();
 
-    Command::cargo_bin("agix")
-        .unwrap()
+    helpers::cmd_non_interactive(home.path())
         .args(["init", "--no-interactive", "--cli", "unknown"])
         .current_dir(&dir)
         .assert()
@@ -158,9 +152,9 @@ fn init_rejects_unknown_cli() {
 #[test]
 fn init_rejects_invalid_scope_at_clap_level() {
     let dir = tempdir().unwrap();
+    let home = tempdir().unwrap();
 
-    Command::cargo_bin("agix")
-        .unwrap()
+    helpers::cmd_non_interactive(home.path())
         .args(["init", "--scope", "bogus", "--no-interactive"])
         .current_dir(&dir)
         .assert()

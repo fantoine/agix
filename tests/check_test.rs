@@ -2,12 +2,21 @@ use assert_cmd::Command;
 use std::fs;
 use tempfile::tempdir;
 
+mod helpers;
+
+// `check` does not prompt, but we still route through the shared helper so
+// integration tests stay hermetic (tempdir HOME) and uniform across the suite.
+// A throwaway HOME tempdir is created per call — `check` itself does not touch
+// HOME, but future TTY/driver probes might, and centralising the override
+// prevents regressions.
 fn check_cmd() -> Command {
-    let mut cmd = Command::cargo_bin("agix").unwrap();
-    // `check` does not prompt, but we follow the project convention to keep
-    // integration tests hermetic regardless of any future TTY touches.
-    cmd.env("AGIX_NO_INTERACTIVE", "1");
-    cmd
+    let tmp = tempdir().unwrap();
+    // Leak the tempdir for the command's lifetime. `check` doesn't write to
+    // HOME, and each test only uses the returned Command once, so the leak is
+    // bounded to the test binary's runtime. Alternative (passing HOME in per
+    // test) would be noisier than the bug this helper prevents.
+    let home = tmp.keep();
+    helpers::cmd_non_interactive(&home)
 }
 
 #[test]

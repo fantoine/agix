@@ -62,6 +62,15 @@ agix doctor
 
 Further commands: `agix check`, `agix update`, `agix remove`, `agix export`. Run `agix <command> --help` for details.
 
+## Scripting / non-interactive use
+
+Some commands (`agix init`, and first-time `--scope global` setup on `add` / `install`) open an interactive CLI picker. Agix skips the picker automatically when stderr is not a terminal (piped stdin, CI runners, etc.). You can also force non-interactive mode explicitly:
+
+- **`agix init --no-interactive --cli claude --cli codex`** — skip the menu and write exactly the passed CLIs into the new Agentfile.
+- **`AGIX_NO_INTERACTIVE=1 agix <command>`** — skip every interactive prompt for the duration of the command. Pass pre-selected CLIs with `--cli` where supported.
+
+When no CLIs are preselected in non-interactive mode the manifest is created with an empty `cli = []`, which you can edit by hand or via `agix add --cli <name>`.
+
 ## License
 
 Apache 2.0

@@ -21,7 +21,11 @@ enum Commands {
         /// Pre-select CLIs (skips the interactive menu). Repeatable.
         #[arg(long, num_args = 1..)]
         cli: Vec<String>,
-        /// Skip the interactive menu entirely.
+        /// Skip the interactive menu entirely. Equivalent to setting the
+        /// AGIX_NO_INTERACTIVE=1 environment variable, which also applies to
+        /// other commands that may prompt (e.g. `add --scope global` on first
+        /// use). Agix also auto-enables non-interactive mode when stderr is
+        /// not a TTY (piped/CI runs).
         #[arg(long)]
         no_interactive: bool,
     },

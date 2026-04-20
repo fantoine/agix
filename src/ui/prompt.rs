@@ -1,17 +1,41 @@
 use crate::drivers::all_drivers;
 use crate::error::{AgixError, Result};
+use std::io::IsTerminal;
+
+/// Decide whether the caller is running in a non-interactive context.
+///
+/// Order of precedence (first hit wins):
+/// 1. Explicit per-command `--no-interactive` flag (via `non_interactive` param).
+/// 2. `AGIX_NO_INTERACTIVE` env var set to any non-empty value.
+/// 3. TTY auto-detect: stderr is not a terminal (piped stdin, CI, etc.).
+///
+/// The TTY path is stable Rust 1.70+ (`std::io::IsTerminal`). We probe stderr
+/// rather than stdin because dialoguer writes its prompt to stderr; stdin can
+/// be a TTY while stderr is a pipe, which would still block rendering.
+pub fn is_non_interactive(non_interactive: bool) -> bool {
+    if non_interactive {
+        return true;
+    }
+    if std::env::var("AGIX_NO_INTERACTIVE")
+        .map(|v| !v.is_empty())
+        .unwrap_or(false)
+    {
+        return true;
+    }
+    !std::io::stderr().is_terminal()
+}
 
 /// Select which CLIs the user wants to manage via agix.
 ///
-/// - If `non_interactive` is true OR `AGIX_NO_INTERACTIVE=1` is set, return
-///   `preselected` (validated against known drivers).
+/// - If the caller is in a non-interactive context (see [`is_non_interactive`]),
+///   return `preselected` (validated against known drivers).
 /// - Otherwise show a `dialoguer::MultiSelect` with all drivers listed;
 ///   default-check detected drivers plus anything in `preselected`.
 pub fn pick_clis(preselected: &[String], non_interactive: bool) -> Result<Vec<String>> {
     let drivers = all_drivers();
     let all_names: Vec<String> = drivers.iter().map(|d| d.name().to_string()).collect();
 
-    if non_interactive || std::env::var("AGIX_NO_INTERACTIVE").is_ok() {
+    if is_non_interactive(non_interactive) {
         let mut out: Vec<String> = Vec::with_capacity(preselected.len());
         for cli in preselected {
             if !all_names.contains(cli) {
@@ -49,7 +73,16 @@ pub fn pick_clis(preselected: &[String], non_interactive: bool) -> Result<Vec<St
         .items(&labels)
         .defaults(&default_selected)
         .interact_opt()
-        .map_err(|e| AgixError::Other(format!("prompt failed: {e}")))?;
+        .map_err(|e| {
+            // Even with the TTY auto-detect guard above, dialoguer can still
+            // fail (e.g. stderr is a TTY but stdin isn't, or some exotic
+            // terminal quirk). Point the user at the escape hatches so the
+            // opaque "IO error: not a terminal" message is never the last word.
+            AgixError::Other(format!(
+                "prompt failed: {e}. Set AGIX_NO_INTERACTIVE=1 or pass \
+                 --no-interactive (on `agix init`) to skip the interactive menu."
+            ))
+        })?;
 
     let Some(picked) = picked else {
         return Err(AgixError::Other("selection cancelled".to_string()));

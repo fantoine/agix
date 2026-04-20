@@ -3,13 +3,13 @@ use predicates::prelude::*;
 use std::fs;
 use tempfile::tempdir;
 
-// A minimal shared helper pattern matching other integration suites: tempdir
-// cwd + tempdir HOME + AGIX_NO_INTERACTIVE=1 keeps runs hermetic.
+mod helpers;
+
+// Thin wrapper around the shared `cmd_non_interactive` helper that also binds
+// `current_dir` (every `list` test needs to run in its own tempdir cwd).
 fn list_cmd(cwd: &std::path::Path, home: &std::path::Path) -> Command {
-    let mut cmd = Command::cargo_bin("agix").unwrap();
-    cmd.env("AGIX_NO_INTERACTIVE", "1")
-        .env("HOME", home)
-        .current_dir(cwd);
+    let mut cmd = helpers::cmd_non_interactive(home);
+    cmd.current_dir(cwd);
     cmd
 }
 
