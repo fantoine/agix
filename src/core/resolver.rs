@@ -1,4 +1,5 @@
 use crate::manifest::agentfile::ProjectManifest;
+use crate::sources::SourceBox;
 
 // ---------------------------------------------------------------------------
 // ResolvedDep
@@ -7,7 +8,7 @@ use crate::manifest::agentfile::ProjectManifest;
 #[derive(Debug, Clone)]
 pub struct ResolvedDep {
     pub name: String,
-    pub source: String,
+    pub source: SourceBox,
     pub version: Option<String>,
     /// CLIs for which this package must be installed.
     pub cli: Vec<String>,

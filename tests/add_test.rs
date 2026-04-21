@@ -42,7 +42,7 @@ fn step2_add_local_shared_dep_writes_to_top_level_dependencies() {
         .success();
 
     let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
-    assert!(content.contains("[dependencies."));
+    assert!(content.contains("[dependencies]"));
     assert!(!content.contains("[claude.dependencies"));
     assert!(content.contains("local:"));
 }
@@ -60,7 +60,7 @@ fn step3_add_local_single_cli_writes_per_cli_section() {
         .success();
 
     let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
-    assert!(content.contains("[claude.dependencies."));
+    assert!(content.contains("[claude.dependencies]"));
 }
 
 // ---------- Step 4: add local --cli claude --cli codex ----------
@@ -76,8 +76,8 @@ fn step4_add_local_multi_cli_writes_under_each_section() {
         .success();
 
     let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
-    assert!(content.contains("[claude.dependencies."));
-    assert!(content.contains("[codex.dependencies."));
+    assert!(content.contains("[claude.dependencies]"));
+    assert!(content.contains("[codex.dependencies]"));
 }
 
 // ---------- Step 5: --cli <unknown-driver> → error listing known drivers ----------
@@ -281,13 +281,20 @@ fn step13_add_same_local_twice_warns_and_overwrites() {
         .stderr(predicates::str::contains("already in [dependencies]"))
         .stderr(predicates::str::contains("overwriting"));
 
-    // Manifest still valid: exactly one entry for the package (TOML may quote
-    // the key if it starts with `.`).
+    // Manifest still valid: exactly one entry for the package. When the dep
+    // has no version/exclude, it serialises as a bare-string key
+    // (`name = "…"`); when it has extra fields, as a `[dependencies.name]`
+    // subtable — accept either by counting both forms.
     let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
     let name = pkg.path().file_name().unwrap().to_str().unwrap();
-    let plain = format!("[dependencies.{name}]");
-    let quoted = format!("[dependencies.\"{name}\"]");
-    let occurrences = content.matches(&plain).count() + content.matches(&quoted).count();
+    let plain_subtable = format!("[dependencies.{name}]");
+    let quoted_subtable = format!("[dependencies.\"{name}\"]");
+    let plain_inline = format!("\n{name} = ");
+    let quoted_inline = format!("\n\"{name}\" = ");
+    let occurrences = content.matches(&plain_subtable).count()
+        + content.matches(&quoted_subtable).count()
+        + content.matches(&plain_inline).count()
+        + content.matches(&quoted_inline).count();
     assert_eq!(
         occurrences, 1,
         "expected 1 entry, got {occurrences}; content: {content}"
@@ -333,11 +340,16 @@ fn step14_suggested_name_local_strips_extension_and_uses_basename() {
         .success();
     let name = pkg.path().file_name().unwrap().to_str().unwrap();
     let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
-    let plain = format!("[dependencies.{name}]");
-    let quoted = format!("[dependencies.\"{name}\"]");
+    let plain_subtable = format!("[dependencies.{name}]");
+    let quoted_subtable = format!("[dependencies.\"{name}\"]");
+    let plain_inline = format!("\n{name} = ");
+    let quoted_inline = format!("\n\"{name}\" = ");
     assert!(
-        content.contains(&plain) || content.contains(&quoted),
-        "expected entry [dependencies.{name}] (plain or quoted), got: {content}"
+        content.contains(&plain_subtable)
+            || content.contains(&quoted_subtable)
+            || content.contains(&plain_inline)
+            || content.contains(&quoted_inline),
+        "expected entry for {name} (subtable or bare-string form), got: {content}"
     );
 }
 
@@ -379,11 +391,16 @@ fn step14_suggested_name_git_uses_last_path_minus_dotgit() {
         .trim_end_matches(".git")
         .to_string();
     let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
-    let plain = format!("[dependencies.{expected_name}]");
-    let quoted = format!("[dependencies.\"{expected_name}\"]");
+    let plain_subtable = format!("[dependencies.{expected_name}]");
+    let quoted_subtable = format!("[dependencies.\"{expected_name}\"]");
+    let plain_inline = format!("\n{expected_name} = ");
+    let quoted_inline = format!("\n\"{expected_name}\" = ");
     assert!(
-        content.contains(&plain) || content.contains(&quoted),
-        "expected [dependencies.{expected_name}] (plain or quoted); got: {content}"
+        content.contains(&plain_subtable)
+            || content.contains(&quoted_subtable)
+            || content.contains(&plain_inline)
+            || content.contains(&quoted_inline),
+        "expected entry for {expected_name} (subtable or bare-string form); got: {content}"
     );
 }
 
@@ -409,7 +426,10 @@ fn step14_suggested_name_marketplace_uses_plugin_name() {
         .success();
 
     let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
-    assert!(content.contains("[dependencies.roundtable]"));
+    assert!(
+        content.contains("[dependencies.roundtable]") || content.contains("\nroundtable = "),
+        "expected roundtable entry (subtable or bare-string form); got: {content}"
+    );
 }
 
 // ---------- Regression: marketplace total-failure returns non-zero ----------

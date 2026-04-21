@@ -29,25 +29,8 @@ pub async fn run() -> anyhow::Result<()> {
         }
     }
 
-    // Validate that every declared dependency source parses. Any parse error
-    // must mention the dep name so the user can find it in the Agentfile.
-    for (name, dep) in &manifest.dependencies {
-        if let Err(e) = crate::sources::parse_source(&dep.source) {
-            anyhow::bail!("Invalid source for dependency '{}': {}", name, e);
-        }
-    }
-    for (cli, deps) in &manifest.cli_dependencies {
-        for (name, dep) in deps {
-            if let Err(e) = crate::sources::parse_source(&dep.source) {
-                anyhow::bail!(
-                    "Invalid source for dependency '{}' under [{}]: {}",
-                    name,
-                    cli,
-                    e
-                );
-            }
-        }
-    }
+    // Sources are parsed eagerly by `Dependency::deserialize`, so reaching
+    // this point already proves every dep's source is well-formed.
 
     // Package manifest: name is present → also require version.
     if let Some(name) = &manifest.agix.name {

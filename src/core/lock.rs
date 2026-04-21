@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 use crate::error::Result;
+use crate::sources::SourceBox;
 
 /// A single file installed by a package.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -13,7 +14,7 @@ pub struct InstalledFile {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct LockedPackage {
     pub name: String,
-    pub source: String,
+    pub source: SourceBox,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sha: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

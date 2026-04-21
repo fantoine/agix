@@ -514,66 +514,10 @@ fresh = {{ source = "local:{}" }}
         .stderr(predicates::str::contains("fresh"));
 }
 
-// ---------------------------------------------------------------------------
-// Regression: `update` honours mangled-lock-source fallback via Installer::uninstall
-// (same fix as Task 4 / `remove`). Crafting a lock entry with unparseable
-// source + tracked file; update-all should delete the tracked file and then
-// proceed to install the dep cleanly.
-// ---------------------------------------------------------------------------
-
-#[test]
-fn regression_update_handles_mangled_lock_source_via_fallback() {
-    let cwd = tempdir().unwrap();
-    let home = tempdir().unwrap();
-    let pkg = build_local_pkg("v1");
-
-    // Pre-seed a file that looks like it was installed under a legacy source scheme.
-    let claude_dir = cwd.path().join(".claude").join("skills");
-    fs::create_dir_all(&claude_dir).unwrap();
-    fs::write(claude_dir.join("legacy.md"), "# legacy content").unwrap();
-
-    write_agentfile(
-        cwd.path(),
-        &format!(
-            r#"[agix]
-cli = ["claude"]
-
-[claude.dependencies]
-stale = {{ source = "local:{}" }}
-"#,
-            pkg.path().display()
-        ),
-    );
-
-    // Forge a lock with an unparseable source for the "stale" dep.
-    let lock_path = cwd.path().join("Agentfile.lock");
-    let forged = format!(
-        r#"[[package]]
-name = "stale"
-source = "weirdlegacy:zzz"
-cli = ["claude"]
-scope = "local"
-
-[[package.files]]
-dest = "{}"
-"#,
-        claude_dir.join("legacy.md").display()
-    );
-    fs::write(&lock_path, forged).unwrap();
-
-    update_cmd(cwd.path(), home.path())
-        .arg("update")
-        .assert()
-        .success()
-        .stderr(predicates::str::contains("lock source unparseable"));
-
-    // Legacy file is gone (fell back to file-based uninstall), and the
-    // freshly-installed dep file is present.
-    assert!(!claude_dir.join("legacy.md").exists());
-    assert!(claude_dir.join("s.md").exists());
-
-    let lock = LockFile::from_file(&lock_path).unwrap();
-    let stale = lock.packages.iter().find(|p| p.name == "stale").unwrap();
-    // After the fix the new install wrote a valid source back into the lock.
-    assert_eq!(stale.source, format!("local:{}", pkg.path().display()));
-}
+// Note: a previous regression verified `update` falling back to file-based
+// uninstall when the lock had an unparseable source. The typed-source
+// refactor removed that fallback — sources are parsed eagerly at lock-load
+// time. `update` now relies on `LockFile::from_file_or_default`, which
+// silently treats a malformed lock as empty and reinstalls from the
+// manifest (the stranded legacy files are the user's to clean up). The
+// parse-rejection invariant itself is unit-tested at the SourceBox layer.

@@ -24,6 +24,7 @@ pub fn detect_git_support() -> GitSupport {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct GitSource {
     url: String,
     ref_str: Option<String>,
@@ -123,6 +124,10 @@ impl Source for GitSource {
             .next()
             .unwrap_or(&self.url);
         Ok(last.trim_end_matches(".git").to_owned())
+    }
+
+    fn clone_box(&self) -> Box<dyn Source> {
+        Box::new(self.clone())
     }
 
     async fn fetch(&self, dest: &Path) -> Result<FetchOutcome> {

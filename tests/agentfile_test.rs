@@ -16,7 +16,7 @@ superpowers = { source = "github:claude-plugins-official/superpowers", version =
     assert_eq!(manifest.agix.cli, vec!["claude", "codex"]);
     assert!(manifest.dependencies.contains_key("rtk"));
     let rtk = &manifest.dependencies["rtk"];
-    assert_eq!(rtk.source, "github:org/rtk");
+    assert_eq!(rtk.source.canonical(), "github:org/rtk");
     assert_eq!(rtk.exclude, Some(vec!["codex".to_string()]));
     let claude_deps = manifest.cli_dependencies.get("claude").unwrap();
     assert!(claude_deps.contains_key("superpowers"));

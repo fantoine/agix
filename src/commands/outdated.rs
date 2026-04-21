@@ -118,128 +118,127 @@ async fn resolve_one(
     manifest_version: Option<&str>,
     github_api_base: Option<&str>,
 ) -> OutdatedStatus {
-    // Fast paths that don't need the Source trait at all. We match on the
-    // lock's `source` prefix rather than parsing, so a mangled source still
-    // lets us render a useful row rather than aborting the whole report.
-    if pkg.source.starts_with("local:") {
-        return OutdatedStatus::Local {
+    // Dispatch on the typed source scheme rather than string prefixes. The
+    // canonical form is guaranteed to start with `<scheme>:` — no mangled
+    // sources possible here since parsing already happened on lock load.
+    match pkg.source.scheme() {
+        "local" => OutdatedStatus::Local {
             name: pkg.name.clone(),
-        };
-    }
-    if pkg.source.starts_with("marketplace:") {
-        // The driver that manages marketplace plugins is the CLI in the
-        // package's `cli` list (typically "claude"). Fall back to a generic
-        // label if `cli` is empty — e.g. a hand-edited lock.
-        let driver = pkg
-            .cli
-            .first()
-            .cloned()
-            .unwrap_or_else(|| "cli".to_string());
-        return OutdatedStatus::Marketplace {
-            name: pkg.name.clone(),
-            driver,
-        };
-    }
-    if let Some(payload) = pkg.source.strip_prefix("git:") {
-        // Plain git sources: use `GitSource::resolve_ref` (libgit2 ls-remote)
-        // to get the target SHA without cloning. Errors become
-        // `ResolveFailed` so one unreachable remote doesn't poison the rest
-        // of the report.
-        let (url, embedded_ref) = match payload.split_once('@') {
-            Some((u, r)) => (u, Some(r)),
-            None => (payload, None),
-        };
-        let ref_str = manifest_version.or(embedded_ref);
-        let source = crate::sources::git::GitSource::new(url, ref_str);
-
-        let current = match pkg.sha.as_deref() {
-            Some(s) => s.to_string(),
-            None => {
-                return OutdatedStatus::UnknownCurrent {
-                    name: pkg.name.clone(),
-                };
+        },
+        "marketplace" => {
+            // The driver that manages marketplace plugins is the CLI in the
+            // package's `cli` list (typically "claude"). Fall back to a
+            // generic label if `cli` is empty — e.g. a hand-edited lock.
+            let driver = pkg
+                .cli
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "cli".to_string());
+            OutdatedStatus::Marketplace {
+                name: pkg.name.clone(),
+                driver,
             }
-        };
-
-        return match source.resolve_ref().await {
-            Ok(available) if available == current => OutdatedStatus::UpToDate {
-                name: pkg.name.clone(),
-                sha: current,
-            },
-            Ok(available) => OutdatedStatus::Outdated {
-                name: pkg.name.clone(),
-                current_sha: current,
-                available_sha: available,
-            },
-            Err(e) => OutdatedStatus::ResolveFailed {
-                name: pkg.name.clone(),
-                error: e.to_string(),
-            },
-        };
-    }
-    if !pkg.source.starts_with("github:") {
-        // Unknown scheme in the lock — label as unparseable for visibility
-        // rather than silently skipping.
-        return OutdatedStatus::UnparseableSource {
-            name: pkg.name.clone(),
-            error: format!("unknown source scheme: {}", pkg.source),
-        };
-    }
-
-    // github: — extract org/repo (and the lock's embedded @ref if present),
-    // then prefer the manifest-declared `version` over the lock's embedded ref
-    // when resolving. This matches the semantics the user wrote in Agentfile.
-    let payload = pkg.source.trim_start_matches("github:");
-    let (path, embedded_ref) = match payload.split_once('@') {
-        Some((p, r)) => (p, Some(r)),
-        None => (payload, None),
-    };
-    let (org, repo) = match path.split_once('/') {
-        Some(x) => x,
-        None => {
-            return OutdatedStatus::UnparseableSource {
-                name: pkg.name.clone(),
-                error: format!(
-                    "github source must be 'github:org/repo', got: {}",
-                    pkg.source
-                ),
-            };
         }
-    };
-
-    // Priority: manifest's `version` (what the user asked for) > lock's
-    // embedded @ref (what `add` captured) > None (resolve HEAD of default).
-    let ref_str = manifest_version.or(embedded_ref);
-
-    let source = crate::sources::github::GitHubSource::new_with_optional_base(
-        org,
-        repo,
-        ref_str,
-        github_api_base,
-    );
-
-    let current = match pkg.sha.as_deref() {
-        Some(s) => s.to_string(),
-        None => {
-            return OutdatedStatus::UnknownCurrent {
-                name: pkg.name.clone(),
+        "git" => {
+            // Plain git sources: re-parse `canonical()` to extract URL + ref,
+            // then call `GitSource::resolve_ref` (libgit2 ls-remote) so we
+            // avoid cloning. Errors become `ResolveFailed` so one unreachable
+            // remote doesn't poison the rest of the report.
+            let canonical = pkg.source.canonical();
+            let payload = canonical.strip_prefix("git:").unwrap_or(&canonical);
+            let (url, embedded_ref) = match payload.split_once('@') {
+                Some((u, r)) => (u, Some(r)),
+                None => (payload, None),
             };
-        }
-    };
+            let ref_str = manifest_version.or(embedded_ref);
+            let source = crate::sources::git::GitSource::new(url, ref_str);
 
-    match source.resolve_ref().await {
-        Ok(available) if available == current => OutdatedStatus::UpToDate {
+            let current = match pkg.sha.as_deref() {
+                Some(s) => s.to_string(),
+                None => {
+                    return OutdatedStatus::UnknownCurrent {
+                        name: pkg.name.clone(),
+                    };
+                }
+            };
+
+            match source.resolve_ref().await {
+                Ok(available) if available == current => OutdatedStatus::UpToDate {
+                    name: pkg.name.clone(),
+                    sha: current,
+                },
+                Ok(available) => OutdatedStatus::Outdated {
+                    name: pkg.name.clone(),
+                    current_sha: current,
+                    available_sha: available,
+                },
+                Err(e) => OutdatedStatus::ResolveFailed {
+                    name: pkg.name.clone(),
+                    error: e.to_string(),
+                },
+            }
+        }
+        "github" => {
+            // github: — extract org/repo (and the canonical's embedded @ref
+            // if present), then prefer the manifest-declared `version` over
+            // the lock's embedded ref when resolving. This matches the
+            // semantics the user wrote in Agentfile.
+            let canonical = pkg.source.canonical();
+            let payload = canonical.strip_prefix("github:").unwrap_or(&canonical);
+            let (path, embedded_ref) = match payload.split_once('@') {
+                Some((p, r)) => (p, Some(r)),
+                None => (payload, None),
+            };
+            let (org, repo) = match path.split_once('/') {
+                Some(x) => x,
+                None => {
+                    return OutdatedStatus::UnparseableSource {
+                        name: pkg.name.clone(),
+                        error: format!("github source must be 'github:org/repo', got: {canonical}"),
+                    };
+                }
+            };
+
+            // Priority: manifest's `version` (what the user asked for) >
+            // lock's embedded @ref (what `add` captured) > None (resolve
+            // HEAD of default).
+            let ref_str = manifest_version.or(embedded_ref);
+
+            let source = crate::sources::github::GitHubSource::new_with_optional_base(
+                org,
+                repo,
+                ref_str,
+                github_api_base,
+            );
+
+            let current = match pkg.sha.as_deref() {
+                Some(s) => s.to_string(),
+                None => {
+                    return OutdatedStatus::UnknownCurrent {
+                        name: pkg.name.clone(),
+                    };
+                }
+            };
+
+            match source.resolve_ref().await {
+                Ok(available) if available == current => OutdatedStatus::UpToDate {
+                    name: pkg.name.clone(),
+                    sha: current,
+                },
+                Ok(available) => OutdatedStatus::Outdated {
+                    name: pkg.name.clone(),
+                    current_sha: current,
+                    available_sha: available,
+                },
+                Err(e) => OutdatedStatus::ResolveFailed {
+                    name: pkg.name.clone(),
+                    error: e.to_string(),
+                },
+            }
+        }
+        other => OutdatedStatus::UnparseableSource {
             name: pkg.name.clone(),
-            sha: current,
-        },
-        Ok(available) => OutdatedStatus::Outdated {
-            name: pkg.name.clone(),
-            current_sha: current,
-            available_sha: available,
-        },
-        Err(e) => OutdatedStatus::ResolveFailed {
-            name: pkg.name.clone(),
-            error: e.to_string(),
+            error: format!("unknown source scheme: {other}"),
         },
     }
 }

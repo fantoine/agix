@@ -65,7 +65,10 @@ fn print_dep(name: &str, dep: &Dependency, lock: &LockFile) {
     let locked = lock.find(name);
     let version = render_version(dep, locked);
     let clis = render_clis(locked);
-    println!("  {name} @ {version} — {source}{clis}", source = dep.source);
+    println!(
+        "  {name} @ {version} — {source}{clis}",
+        source = dep.source.canonical()
+    );
 }
 
 fn render_version(dep: &Dependency, locked: Option<&LockedPackage>) -> String {

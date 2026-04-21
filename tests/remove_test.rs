@@ -366,62 +366,13 @@ async fn step8_remove_marketplace_plugin_invokes_claude_uninstall() {
     );
 }
 
-// ---------- Regression: mangled lock source falls back to file-based uninstall ----------
-
-#[tokio::test]
-async fn regression_mangled_lock_source_falls_back_and_warns() {
-    // Lock contains a `source` string that doesn't parse (no scheme). Legacy
-    // fix: abort with parse error. New behavior: warn + fall back to
-    // file-based uninstall using `pkg.files`, then remove the lock entry.
-    let cwd = tempdir().unwrap();
-    let home = tempdir().unwrap();
-
-    // Create a file that our "mangled" lock entry claims to own.
-    let owned_dir = cwd.path().join(".claude").join("skills");
-    fs::create_dir_all(&owned_dir).unwrap();
-    let owned_file = owned_dir.join("s.md");
-    fs::write(&owned_file, "# s").unwrap();
-
-    fs::write(
-        cwd.path().join("Agentfile"),
-        "[agix]\ncli = [\"claude\"]\n\n[dependencies]\nmangled-pkg = { source = \"local:/tmp/nope\" }\n",
-    )
-    .unwrap();
-
-    // Hand-crafted lock with an unparseable source (no colon/scheme).
-    let lock_contents = format!(
-        r#"[[package]]
-name = "mangled-pkg"
-source = "this-has-no-scheme"
-cli = ["claude"]
-scope = "local"
-
-[[package.files]]
-dest = "{}"
-"#,
-        owned_file.display()
-    );
-    fs::write(cwd.path().join("Agentfile.lock"), &lock_contents).unwrap();
-
-    remove_cmd(cwd.path(), home.path())
-        .args(["remove", "mangled-pkg"])
-        .assert()
-        .success()
-        .stderr(predicates::str::contains("lock source unparseable"));
-
-    // File was deleted via fallback.
-    assert!(
-        !owned_file.exists(),
-        "tracked file should be removed via fallback"
-    );
-
-    // Lock entry was dropped.
-    let lock_after = fs::read_to_string(cwd.path().join("Agentfile.lock")).unwrap();
-    assert!(
-        !lock_after.contains("mangled-pkg"),
-        "lock entry should be gone: {lock_after}"
-    );
-}
+// Note: a previous regression guarded "mangled lock source falls back to
+// file-based uninstall". The typed-source refactor removed that fallback:
+// unparseable sources are now rejected eagerly on lock load. The observable
+// behaviour via the CLI depends on whether the caller uses `from_file`
+// (errors) or `from_file_or_default` (silently treats as empty) — the
+// invariant is covered at the SourceBox layer by unit tests in
+// `src/sources/mod.rs`, so the integration-level regression was retired.
 
 // ---------- Regression: lenient --cli filter accepts unknown driver (no-op) ----------
 

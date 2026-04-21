@@ -4,6 +4,7 @@ use std::path::Path;
 use crate::error::{AgixError, Result};
 use crate::sources::{FetchOutcome, Source, SourceScheme};
 
+#[derive(Debug, Clone)]
 pub struct MarketplaceSource {
     pub marketplace: String,
     pub plugin: String,
@@ -13,6 +14,10 @@ pub struct MarketplaceSource {
 impl Source for MarketplaceSource {
     fn scheme(&self) -> &'static str {
         "marketplace"
+    }
+
+    fn clone_box(&self) -> Box<dyn Source> {
+        Box::new(self.clone())
     }
 
     fn canonical(&self) -> String {

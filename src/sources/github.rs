@@ -11,6 +11,7 @@ const DEFAULT_API_BASE: &str = "https://api.github.com";
 const DEFAULT_WEB_BASE: &str = "https://github.com";
 const BASE_URL_ENV_VAR: &str = "AGIX_GITHUB_BASE_URL";
 
+#[derive(Debug, Clone)]
 pub struct GitHubSource {
     org: String,
     repo: String,
@@ -177,6 +178,10 @@ impl Source for GitHubSource {
 
     fn suggested_name(&self) -> Result<String> {
         Ok(self.repo.clone())
+    }
+
+    fn clone_box(&self) -> Box<dyn Source> {
+        Box::new(self.clone())
     }
 
     async fn fetch(&self, dest: &Path) -> Result<FetchOutcome> {

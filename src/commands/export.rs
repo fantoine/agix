@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use crate::constants::manifest::{AGENTFILE, AGENTFILE_LOCK};
 use crate::drivers::Scope;
 use crate::manifest::agentfile::{Dependency, ProjectManifest};
-use crate::sources::parse_source;
+use crate::sources::SourceBox;
 
 /// Export the current project into a self-contained zip archive.
 ///
@@ -106,11 +106,12 @@ fn rewrite_local_deps(
     local_sources: &mut HashMap<String, PathBuf>,
 ) {
     for (name, dep) in deps.iter_mut() {
-        if let Ok(src) = parse_source(&dep.source) {
-            if let Some(path) = src.local_path() {
-                local_sources.insert(name.clone(), path.to_path_buf());
-                dep.source = format!("local:./local-sources/{name}");
-            }
+        if let Some(path) = dep.source.local_path() {
+            local_sources.insert(name.clone(), path.to_path_buf());
+            // Unwrap: `local:./…` is a syntactically valid local source, so
+            // parsing cannot fail here.
+            dep.source = SourceBox::parse(&format!("local:./local-sources/{name}"))
+                .expect("hard-coded local: source is always parseable");
         }
     }
 }

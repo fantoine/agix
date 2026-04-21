@@ -5,7 +5,7 @@ use crate::core::resolver::Resolver;
 use crate::drivers::{all_drivers, driver_for, FetchedPackage, Scope};
 use crate::error::Result;
 use crate::manifest::agentfile::ProjectManifest;
-use crate::sources::{parse_source, FetchOutcome};
+use crate::sources::FetchOutcome;
 
 pub struct Installer;
 
@@ -24,13 +24,10 @@ impl Installer {
             let fetch_dir = tmp.path().join(&dep.name);
             std::fs::create_dir_all(&fetch_dir)?;
 
-            // Wrap parse errors so the failing dep is named in the error message
-            // (bare `parse_source` only mentions the scheme string; the user needs
-            // the dep name to locate the broken entry in their Agentfile).
-            let source = parse_source(&dep.source).map_err(|e| {
-                crate::error::AgixError::InvalidSource(format!("dep '{}': {}", dep.name, e))
-            })?;
-            let outcome = source.fetch(&fetch_dir).await?;
+            // `dep.source` is already a typed `SourceBox` (parsed eagerly at
+            // manifest-load time), so we can dispatch directly without
+            // re-parsing.
+            let outcome = dep.source.fetch(&fetch_dir).await?;
 
             match outcome {
                 FetchOutcome::DelegateToDriver {
@@ -183,28 +180,15 @@ impl Installer {
         let cli_names = pkg.cli.clone();
         let files = pkg.files.clone();
 
-        // Parse the lock's `source` string to decide marketplace vs file-based
-        // uninstall. If the source is mangled (hand-edited, older format, …)
-        // fall back to file-based uninstall so the user can still clean up.
-        // Marketplace-managed plugins in that degraded path may need manual
-        // cleanup via the CLI itself — we warn explicitly.
-        let marketplace_route = match parse_source(&pkg.source) {
-            Ok(source) => source
-                .as_marketplace()
-                .map(|(m, p)| (m.to_string(), p.to_string())),
-            Err(e) => {
-                crate::output::warn(&format!(
-                    "lock source unparseable for '{name}': {e}; falling back to file-based uninstall"
-                ));
-                if files.is_empty() {
-                    crate::output::warn(&format!(
-                        "no tracked files for '{name}' — if this was a marketplace plugin, \
-                         uninstall it manually via the relevant CLI"
-                    ));
-                }
-                None
-            }
-        };
+        // `pkg.source` is already a typed `SourceBox` (parsed on lock load),
+        // so marketplace detection is a direct dispatch. The hand-edited
+        // fallback path is gone: `LockFile::from_file` already rejects
+        // unparseable sources, so reaching this point means the source is
+        // well-formed.
+        let marketplace_route = pkg
+            .source
+            .as_marketplace()
+            .map(|(m, p)| (m.to_string(), p.to_string()));
 
         for cli_name in &cli_names {
             let driver = match driver_for(cli_name) {

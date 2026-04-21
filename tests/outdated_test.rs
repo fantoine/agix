@@ -184,7 +184,7 @@ async fn step3_outdated_reports_package_when_remote_sha_differs() {
     deps.insert(
         "claude-later".to_string(),
         Dependency {
-            source: "github:fantoine/claude-later".to_string(),
+            source: agix::sources::SourceBox::parse("github:fantoine/claude-later").unwrap(),
             version: Some("main".to_string()),
             exclude: None,
         },
@@ -205,7 +205,7 @@ async fn step3_outdated_reports_package_when_remote_sha_differs() {
     let lock = LockFile {
         packages: vec![LockedPackage {
             name: "claude-later".to_string(),
-            source: "github:fantoine/claude-later".to_string(),
+            source: agix::sources::SourceBox::parse("github:fantoine/claude-later").unwrap(),
             sha: Some("0000000000000000000000000000000000000000".to_string()),
             content_hash: None,
             version: Some("main".to_string()),
@@ -259,7 +259,7 @@ async fn step3_outdated_up_to_date_when_remote_sha_matches() {
     deps.insert(
         "claude-later".to_string(),
         Dependency {
-            source: "github:fantoine/claude-later".to_string(),
+            source: agix::sources::SourceBox::parse("github:fantoine/claude-later").unwrap(),
             version: Some("main".to_string()),
             exclude: None,
         },
@@ -278,7 +278,7 @@ async fn step3_outdated_up_to_date_when_remote_sha_matches() {
     let lock = LockFile {
         packages: vec![LockedPackage {
             name: "claude-later".to_string(),
-            source: "github:fantoine/claude-later".to_string(),
+            source: agix::sources::SourceBox::parse("github:fantoine/claude-later").unwrap(),
             sha: Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()),
             content_hash: None,
             version: Some("main".to_string()),
@@ -328,7 +328,10 @@ async fn marketplace_deps_are_labeled_not_remotely_checked() {
     let lock = LockFile {
         packages: vec![LockedPackage {
             name: "roundtable".to_string(),
-            source: "marketplace:fantoine/claude-plugins@roundtable".to_string(),
+            source: agix::sources::SourceBox::parse(
+                "marketplace:fantoine/claude-plugins@roundtable",
+            )
+            .unwrap(),
             sha: None,
             content_hash: None,
             version: None,

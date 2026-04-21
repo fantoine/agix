@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use serde::{de, Deserialize, Deserializer, Serialize};
+use serde::{de, ser::SerializeMap, Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::constants::manifest::{
     KEY_AGIX, KEY_DEPENDENCIES, KEY_EXCLUDE, KEY_HOOKS, KEY_SOURCE, KEY_VERSION,
     RESERVED_TOP_LEVEL_KEYS,
 };
+use crate::sources::{parse_source, SourceBox};
 
 // ---------------------------------------------------------------------------
 // AgixSection
@@ -32,11 +33,43 @@ pub struct AgixSection {
 // Dependency  (supports both string and table forms)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Dependency {
-    pub source: String,
+    pub source: SourceBox,
     pub version: Option<String>,
     pub exclude: Option<Vec<String>>,
+}
+
+impl Dependency {
+    /// Build a [`Dependency`] from a source string, parsing it eagerly. Useful
+    /// for tests and programmatic callers like `agix add`.
+    pub fn from_source_str(s: &str) -> crate::error::Result<Self> {
+        Ok(Dependency {
+            source: SourceBox::parse(s)?,
+            version: None,
+            exclude: None,
+        })
+    }
+}
+
+/// Emit either a bare string (when neither `version` nor `exclude` is set —
+/// `dep = "github:org/repo"`) or an inline/section table form.
+impl Serialize for Dependency {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        if self.version.is_none() && self.exclude.is_none() {
+            return serializer.serialize_str(&self.source.canonical());
+        }
+        let len = 1 + self.version.is_some() as usize + self.exclude.is_some() as usize;
+        let mut map = serializer.serialize_map(Some(len))?;
+        map.serialize_entry(KEY_SOURCE, &self.source.canonical())?;
+        if let Some(v) = &self.version {
+            map.serialize_entry(KEY_VERSION, v)?;
+        }
+        if let Some(e) = &self.exclude {
+            map.serialize_entry(KEY_EXCLUDE, e)?;
+        }
+        map.end()
+    }
 }
 
 impl<'de> Deserialize<'de> for Dependency {
@@ -52,19 +85,16 @@ impl<'de> Deserialize<'de> for Dependency {
 
             // String form: dep = "github:org/repo"
             fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                let source = parse_source(v).map_err(de::Error::custom)?;
                 Ok(Dependency {
-                    source: v.to_string(),
+                    source: SourceBox::from(source),
                     version: None,
                     exclude: None,
                 })
             }
 
             fn visit_string<E: de::Error>(self, v: String) -> Result<Self::Value, E> {
-                Ok(Dependency {
-                    source: v,
-                    version: None,
-                    exclude: None,
-                })
+                self.visit_str(&v)
             }
 
             // Table form: dep = { source = "...", version = "...", exclude = [...] }
@@ -88,8 +118,9 @@ impl<'de> Deserialize<'de> for Dependency {
                 }
 
                 let source = source.ok_or_else(|| de::Error::missing_field(KEY_SOURCE))?;
+                let parsed = parse_source(&source).map_err(de::Error::custom)?;
                 Ok(Dependency {
-                    source,
+                    source: SourceBox::from(parsed),
                     version,
                     exclude,
                 })

@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use crate::error::{AgixError, Result};
 use crate::sources::{FetchOutcome, Source, SourceScheme};
 
+#[derive(Debug, Clone)]
 pub struct LocalSource {
     pub path: PathBuf,
 }
@@ -60,6 +61,10 @@ impl Source for LocalSource {
                     self.path.display()
                 ))
             })
+    }
+
+    fn clone_box(&self) -> Box<dyn Source> {
+        Box::new(self.clone())
     }
 
     async fn fetch(&self, dest: &Path) -> Result<FetchOutcome> {

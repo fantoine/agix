@@ -56,7 +56,7 @@ pub async fn run(
     let name = src.suggested_name()?;
 
     let dep = Dependency {
-        source: source.clone(),
+        source: crate::sources::SourceBox::from(src),
         version,
         exclude: None,
     };

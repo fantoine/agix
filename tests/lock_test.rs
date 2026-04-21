@@ -1,4 +1,5 @@
 use agix::core::lock::{InstalledFile, LockFile, LockedPackage};
+use agix::sources::SourceBox;
 use tempfile::tempdir;
 
 #[test]
@@ -9,7 +10,7 @@ fn roundtrip_lock_file() {
     let mut lock = LockFile::default();
     lock.packages.push(LockedPackage {
         name: "superpowers".to_string(),
-        source: "github:claude-plugins-official/superpowers".to_string(),
+        source: SourceBox::parse("github:claude-plugins-official/superpowers").unwrap(),
         sha: Some("a3f8c12d".to_string()),
         content_hash: None,
         version: None,
@@ -34,7 +35,7 @@ fn lock_file_find_package() {
     let mut lock = LockFile::default();
     lock.packages.push(LockedPackage {
         name: "rtk".to_string(),
-        source: "github:org/rtk".to_string(),
+        source: SourceBox::parse("github:org/rtk").unwrap(),
         sha: Some("abc123".to_string()),
         content_hash: None,
         version: None,

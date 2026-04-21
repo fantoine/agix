@@ -175,13 +175,16 @@ cli-broken-dep = "nope:whatever"
     )
     .unwrap();
 
+    // Eager parsing in `Dependency::deserialize` surfaces the dep key via
+    // serde's path-tracking; the parent CLI section is not carried in the
+    // error (serde only attaches the immediate key). Asserting on the dep
+    // key alone is enough to locate the broken entry.
     check_cmd()
         .arg("check")
         .current_dir(&dir)
         .assert()
         .failure()
-        .stderr(predicates::str::contains("cli-broken-dep"))
-        .stderr(predicates::str::contains("claude"));
+        .stderr(predicates::str::contains("cli-broken-dep"));
 }
 
 #[test]

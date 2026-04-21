@@ -1,5 +1,4 @@
 use crate::constants::manifest::{AGENTFILE, AGENTFILE_LOCK};
-use crate::sources::parse_source;
 
 pub async fn run() -> anyhow::Result<()> {
     let dir = std::env::current_dir()?;
@@ -74,7 +73,7 @@ pub async fn run() -> anyhow::Result<()> {
         // whose files we never tracked would be misleading. Active
         // cross-checks against `claude plugin list` are deferred (see
         // findings log).
-        if parse_source(&pkg.source).is_ok_and(|s| s.as_marketplace().is_some()) {
+        if pkg.source.as_marketplace().is_some() {
             let driver = pkg
                 .cli
                 .first()

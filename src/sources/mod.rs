@@ -4,6 +4,7 @@ pub mod local;
 pub mod marketplace;
 
 use async_trait::async_trait;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::path::{Path, PathBuf};
 
 use crate::error::{AgixError, Result};
@@ -24,7 +25,7 @@ pub enum FetchOutcome {
 }
 
 #[async_trait]
-pub trait Source: Send + Sync {
+pub trait Source: Send + Sync + std::fmt::Debug {
     /// Scheme prefix (e.g. "github", "git", "local", "marketplace"). Matches
     /// the left side of `<scheme>:<value>` in Agentfile source strings.
     fn scheme(&self) -> &'static str;
@@ -50,6 +51,89 @@ pub trait Source: Send + Sync {
     /// Default: None.
     fn as_marketplace(&self) -> Option<(&str, &str)> {
         None
+    }
+
+    /// Deep clone into a new trait object. Required because `Box<dyn Source>`
+    /// can't derive `Clone`; [`SourceBox`] forwards its `Clone` impl here.
+    fn clone_box(&self) -> Box<dyn Source>;
+}
+
+// ---------------------------------------------------------------------------
+// SourceBox — a typed, serde-aware wrapper around `Box<dyn Source>`.
+// ---------------------------------------------------------------------------
+
+/// Newtype around `Box<dyn Source>` that adds `Debug`, `Clone`, `PartialEq`,
+/// `Eq`, `Serialize` and `Deserialize`.
+///
+/// Equality and hashing (not implemented — not needed yet) are based on the
+/// canonical `<scheme>:<value>` form, so two sources that parse-and-canonicalise
+/// to the same string are considered equal even if their internal reps differ.
+///
+/// Serde roundtrip: `SourceBox` (de)serialises from/to a single TOML string,
+/// which is what you want inside `Dependency` and `LockedPackage`.
+pub struct SourceBox(Box<dyn Source>);
+
+impl SourceBox {
+    pub fn parse(s: &str) -> Result<Self> {
+        parse_source(s).map(SourceBox)
+    }
+
+    pub fn as_source(&self) -> &dyn Source {
+        &*self.0
+    }
+
+    pub fn into_inner(self) -> Box<dyn Source> {
+        self.0
+    }
+}
+
+impl From<Box<dyn Source>> for SourceBox {
+    fn from(b: Box<dyn Source>) -> Self {
+        SourceBox(b)
+    }
+}
+
+impl std::fmt::Debug for SourceBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("SourceBox")
+            .field(&self.0.canonical())
+            .finish()
+    }
+}
+
+impl std::ops::Deref for SourceBox {
+    type Target = dyn Source;
+    fn deref(&self) -> &Self::Target {
+        &*self.0
+    }
+}
+
+impl Clone for SourceBox {
+    fn clone(&self) -> Self {
+        SourceBox(self.0.clone_box())
+    }
+}
+
+impl PartialEq for SourceBox {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.canonical() == other.0.canonical()
+    }
+}
+
+impl Eq for SourceBox {}
+
+impl Serialize for SourceBox {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0.canonical())
+    }
+}
+
+impl<'de> Deserialize<'de> for SourceBox {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        parse_source(&s)
+            .map(SourceBox)
+            .map_err(serde::de::Error::custom)
     }
 }
 
