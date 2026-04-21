@@ -9,6 +9,8 @@ pub mod outdated;
 pub mod remove;
 pub mod update;
 
+use crate::constants::manifest::{AGENTFILE, AGENTFILE_LOCK};
+use crate::constants::paths::AGIX_DIR;
 use crate::drivers::Scope;
 use std::path::PathBuf;
 
@@ -18,12 +20,12 @@ use std::path::PathBuf;
 pub fn agentfile_paths_no_autoinit(scope: Scope) -> anyhow::Result<(PathBuf, PathBuf, Scope)> {
     if scope.is_global() {
         let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("no home directory"))?;
-        let dir = home.join(".agix");
+        let dir = home.join(AGIX_DIR);
         std::fs::create_dir_all(&dir)?;
-        Ok((dir.join("Agentfile"), dir.join("Agentfile.lock"), scope))
+        Ok((dir.join(AGENTFILE), dir.join(AGENTFILE_LOCK), scope))
     } else {
         let dir = std::env::current_dir()?;
-        Ok((dir.join("Agentfile"), dir.join("Agentfile.lock"), scope))
+        Ok((dir.join(AGENTFILE), dir.join(AGENTFILE_LOCK), scope))
     }
 }
 

@@ -1,9 +1,10 @@
+use crate::constants::manifest::{AGENTFILE, AGENTFILE_LOCK};
 use crate::sources::parse_source;
 
 pub async fn run() -> anyhow::Result<()> {
     let dir = std::env::current_dir()?;
-    let agentfile_path = dir.join("Agentfile");
-    let lock_path = dir.join("Agentfile.lock");
+    let agentfile_path = dir.join(AGENTFILE);
+    let lock_path = dir.join(AGENTFILE_LOCK);
 
     println!("Agix Doctor\n");
 

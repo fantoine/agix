@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use crate::constants::manifest::{AGENTFILE, AGENTFILE_LOCK};
 use crate::drivers::Scope;
 use crate::manifest::agentfile::{Dependency, ProjectManifest};
 use crate::sources::parse_source;
@@ -59,14 +60,14 @@ pub async fn run(scope: Scope, all: bool, output: Option<String>) -> Result<()> 
 
     // Rewritten Agentfile.
     let rewritten_agentfile = rewritten.to_toml_string()?;
-    zip.start_file("Agentfile", options)?;
+    zip.start_file(AGENTFILE, options)?;
     zip.write_all(rewritten_agentfile.as_bytes())?;
 
     // Rewritten lock (if one exists).
     if lock_path.exists() {
         let lock_text = std::fs::read_to_string(&lock_path)?;
         let rewritten_lock = rewrite_local_sources_in_lock(&lock_text, &local_sources)?;
-        zip.start_file("Agentfile.lock", options)?;
+        zip.start_file(AGENTFILE_LOCK, options)?;
         zip.write_all(rewritten_lock.as_bytes())?;
     }
 

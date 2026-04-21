@@ -1,5 +1,7 @@
+use crate::constants::manifest::AGENTFILE;
+
 pub async fn run() -> anyhow::Result<()> {
-    let path = std::env::current_dir()?.join("Agentfile");
+    let path = std::env::current_dir()?.join(AGENTFILE);
     if !path.exists() {
         anyhow::bail!("No Agentfile found in current directory.");
     }

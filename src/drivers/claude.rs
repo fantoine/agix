@@ -1,3 +1,4 @@
+use crate::constants::paths::CLAUDE_DIR;
 use crate::core::lock::InstalledFile;
 use crate::drivers::{CliDriver, FetchedPackage, Scope};
 use crate::error::{AgixError, Result};
@@ -85,7 +86,7 @@ impl ClaudeDriver {
         }
 
         // Run post-install hook if an Agentfile is present
-        let agentfile_path = pkg_path.join("Agentfile");
+        let agentfile_path = pkg_path.join(crate::constants::manifest::AGENTFILE);
         if let Some(manifest) =
             crate::manifest::agentfile::PackageManifest::from_file(&agentfile_path)?
         {
@@ -110,7 +111,7 @@ impl CliDriver for ClaudeDriver {
 
     fn detect(&self) -> bool {
         let home_claude = dirs::home_dir()
-            .map(|h| h.join(".claude").exists())
+            .map(|h| h.join(CLAUDE_DIR).exists())
             .unwrap_or(false);
         home_claude || which::which("claude").is_ok()
     }
@@ -126,9 +127,9 @@ impl CliDriver for ClaudeDriver {
                 let home = dirs::home_dir().ok_or_else(|| {
                     AgixError::Other("cannot determine home directory".to_string())
                 })?;
-                home.join(".claude")
+                home.join(CLAUDE_DIR)
             }
-            Scope::Local => PathBuf::from(".claude"),
+            Scope::Local => PathBuf::from(CLAUDE_DIR),
         };
         self.install_with_base(pkg_name, fetched, scope, &base)
     }
@@ -212,7 +213,7 @@ impl CliDriver for ClaudeDriver {
     }
 
     fn detect_local_config(&self, cwd: &Path) -> Option<PathBuf> {
-        let candidate = cwd.join(".claude");
+        let candidate = cwd.join(CLAUDE_DIR);
         if candidate.exists() {
             Some(candidate)
         } else {

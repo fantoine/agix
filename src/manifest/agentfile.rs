@@ -3,6 +3,11 @@ use std::path::Path;
 
 use serde::{de, Deserialize, Deserializer, Serialize};
 
+use crate::constants::manifest::{
+    KEY_AGIX, KEY_DEPENDENCIES, KEY_EXCLUDE, KEY_HOOKS, KEY_SOURCE, KEY_VERSION,
+    RESERVED_TOP_LEVEL_KEYS,
+};
+
 // ---------------------------------------------------------------------------
 // AgixSection
 // ---------------------------------------------------------------------------
@@ -70,19 +75,19 @@ impl<'de> Deserialize<'de> for Dependency {
 
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
-                        "source" => source = Some(map.next_value()?),
-                        "version" => version = Some(map.next_value()?),
-                        "exclude" => exclude = Some(map.next_value()?),
+                        k if k == KEY_SOURCE => source = Some(map.next_value()?),
+                        k if k == KEY_VERSION => version = Some(map.next_value()?),
+                        k if k == KEY_EXCLUDE => exclude = Some(map.next_value()?),
                         other => {
                             return Err(de::Error::unknown_field(
                                 other,
-                                &["source", "version", "exclude"],
+                                &[KEY_SOURCE, KEY_VERSION, KEY_EXCLUDE],
                             ))
                         }
                     }
                 }
 
-                let source = source.ok_or_else(|| de::Error::missing_field("source"))?;
+                let source = source.ok_or_else(|| de::Error::missing_field(KEY_SOURCE))?;
                 Ok(Dependency {
                     source,
                     version,
@@ -144,29 +149,28 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 
         // --- [agix] section ---
         let agix: AgixSection = table
-            .get("agix")
-            .ok_or_else(|| de::Error::missing_field("agix"))?
+            .get(KEY_AGIX)
+            .ok_or_else(|| de::Error::missing_field(KEY_AGIX))?
             .clone()
             .try_into()
             .map_err(de::Error::custom)?;
 
         // --- [dependencies] section (optional) ---
-        let dependencies: HashMap<String, Dependency> = match table.get("dependencies") {
+        let dependencies: HashMap<String, Dependency> = match table.get(KEY_DEPENDENCIES) {
             Some(v) => v.clone().try_into().map_err(de::Error::custom)?,
             None => HashMap::new(),
         };
 
         // --- per-CLI sections (everything that is a table AND has a `dependencies` sub-key) ---
         // We collect all top-level keys that look like CLI sections.
-        let reserved = ["agix", "dependencies", "hooks"];
         let mut cli_dependencies: HashMap<String, HashMap<String, Dependency>> = HashMap::new();
 
         for (key, value) in table {
-            if reserved.contains(&key.as_str()) {
+            if RESERVED_TOP_LEVEL_KEYS.contains(&key.as_str()) {
                 continue;
             }
             if let Some(sub_table) = value.as_table() {
-                if let Some(deps_value) = sub_table.get("dependencies") {
+                if let Some(deps_value) = sub_table.get(KEY_DEPENDENCIES) {
                     let deps: HashMap<String, Dependency> =
                         deps_value.clone().try_into().map_err(de::Error::custom)?;
                     cli_dependencies.insert(key.clone(), deps);
@@ -206,12 +210,12 @@ impl ProjectManifest {
         let mut root = toml::map::Map::new();
 
         // [agix]
-        root.insert("agix".to_string(), Value::try_from(&self.agix)?);
+        root.insert(KEY_AGIX.to_string(), Value::try_from(&self.agix)?);
 
         // [dependencies]
         if !self.dependencies.is_empty() {
             root.insert(
-                "dependencies".to_string(),
+                KEY_DEPENDENCIES.to_string(),
                 Value::try_from(&self.dependencies)?,
             );
         }
@@ -222,7 +226,7 @@ impl ProjectManifest {
                 continue;
             }
             let mut cli_table = toml::map::Map::new();
-            cli_table.insert("dependencies".to_string(), Value::try_from(deps)?);
+            cli_table.insert(KEY_DEPENDENCIES.to_string(), Value::try_from(deps)?);
             root.insert(cli.clone(), Value::Table(cli_table));
         }
 
@@ -272,31 +276,30 @@ impl<'de> Deserialize<'de> for PackageManifest {
             .ok_or_else(|| de::Error::custom("expected a TOML table at the document root"))?;
 
         let agix: AgixSection = table
-            .get("agix")
-            .ok_or_else(|| de::Error::missing_field("agix"))?
+            .get(KEY_AGIX)
+            .ok_or_else(|| de::Error::missing_field(KEY_AGIX))?
             .clone()
             .try_into()
             .map_err(de::Error::custom)?;
 
-        let hooks: Option<Hooks> = match table.get("hooks") {
+        let hooks: Option<Hooks> = match table.get(KEY_HOOKS) {
             Some(v) => Some(v.clone().try_into().map_err(de::Error::custom)?),
             None => None,
         };
 
-        let dependencies: HashMap<String, Dependency> = match table.get("dependencies") {
+        let dependencies: HashMap<String, Dependency> = match table.get(KEY_DEPENDENCIES) {
             Some(v) => v.clone().try_into().map_err(de::Error::custom)?,
             None => HashMap::new(),
         };
 
-        let reserved = ["agix", "dependencies", "hooks"];
         let mut cli_dependencies: HashMap<String, HashMap<String, Dependency>> = HashMap::new();
 
         for (key, value) in table {
-            if reserved.contains(&key.as_str()) {
+            if RESERVED_TOP_LEVEL_KEYS.contains(&key.as_str()) {
                 continue;
             }
             if let Some(sub_table) = value.as_table() {
-                if let Some(deps_value) = sub_table.get("dependencies") {
+                if let Some(deps_value) = sub_table.get(KEY_DEPENDENCIES) {
                     let deps: HashMap<String, Dependency> =
                         deps_value.clone().try_into().map_err(de::Error::custom)?;
                     cli_dependencies.insert(key.clone(), deps);

@@ -1,3 +1,4 @@
+use crate::constants::paths::CODEX_DIR;
 use crate::core::lock::InstalledFile;
 use crate::drivers::{CliDriver, FetchedPackage, Scope};
 use crate::error::{AgixError, Result};
@@ -46,7 +47,7 @@ impl CliDriver for CodexDriver {
     fn detect(&self) -> bool {
         which::which("codex").is_ok()
             || dirs::home_dir()
-                .map(|h| h.join(".codex").exists())
+                .map(|h| h.join(CODEX_DIR).exists())
                 .unwrap_or(false)
     }
 
@@ -58,7 +59,7 @@ impl CliDriver for CodexDriver {
     ) -> Result<Vec<InstalledFile>> {
         let home = dirs::home_dir()
             .ok_or_else(|| AgixError::Other("cannot determine home directory".to_string()))?;
-        let base = home.join(".codex").join("agix");
+        let base = home.join(CODEX_DIR).join("agix");
         self.install_with_base(pkg_name, fetched, scope, &base)
     }
 
@@ -98,7 +99,7 @@ impl CliDriver for CodexDriver {
     }
 
     fn detect_local_config(&self, cwd: &Path) -> Option<PathBuf> {
-        let candidate = cwd.join(".codex");
+        let candidate = cwd.join(CODEX_DIR);
         if candidate.exists() {
             Some(candidate)
         } else {
