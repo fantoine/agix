@@ -1,6 +1,7 @@
-use assert_cmd::Command;
 use std::io::Read;
 use tempfile::tempdir;
+
+mod helpers;
 
 /// Read the `Agentfile` entry out of an exported zip as a UTF-8 string.
 fn read_agentfile_from_zip(zip_path: &std::path::Path) -> String {
@@ -15,16 +16,18 @@ fn read_agentfile_from_zip(zip_path: &std::path::Path) -> String {
 #[test]
 fn export_creates_zip_with_agentfile() {
     let dir = tempdir().unwrap();
+    let home = tempdir().unwrap();
     std::fs::write(dir.path().join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
     std::fs::write(dir.path().join("Agentfile.lock"), "").unwrap();
 
     let output = dir.path().join("backup.zip");
-    let mut cmd = Command::cargo_bin("agix").unwrap();
-    cmd.current_dir(dir.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(dir.path())
         .arg("export")
         .arg("--output")
-        .arg(output.to_str().unwrap());
-    cmd.assert().success();
+        .arg(output.to_str().unwrap())
+        .assert()
+        .success();
     assert!(output.exists());
 }
 
@@ -32,10 +35,10 @@ fn export_creates_zip_with_agentfile() {
 #[test]
 fn step2_export_default_filename_writes_agix_export_zip_in_cwd() {
     let dir = tempdir().unwrap();
+    let home = tempdir().unwrap();
     std::fs::write(dir.path().join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
 
-    Command::cargo_bin("agix")
-        .unwrap()
+    helpers::cmd_non_interactive(home.path())
         .current_dir(dir.path())
         .arg("export")
         .assert()
@@ -55,10 +58,10 @@ fn step2_export_default_filename_writes_agix_export_zip_in_cwd() {
 #[test]
 fn step4_export_all_flag_is_not_yet_implemented_and_errors() {
     let dir = tempdir().unwrap();
+    let home = tempdir().unwrap();
     std::fs::write(dir.path().join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
 
-    let assert = Command::cargo_bin("agix")
-        .unwrap()
+    let assert = helpers::cmd_non_interactive(home.path())
         .current_dir(dir.path())
         .args(["export", "--all"])
         .assert()
@@ -76,10 +79,10 @@ fn step4_export_all_flag_is_not_yet_implemented_and_errors() {
 #[test]
 fn step5_export_without_agentfile_exits_nonzero_and_suggests_init() {
     let dir = tempdir().unwrap();
+    let home = tempdir().unwrap();
     // Deliberately no Agentfile.
 
-    let assert = Command::cargo_bin("agix")
-        .unwrap()
+    let assert = helpers::cmd_non_interactive(home.path())
         .current_dir(dir.path())
         .arg("export")
         .assert()
@@ -105,14 +108,14 @@ fn step5_export_without_agentfile_exits_nonzero_and_suggests_init() {
 #[test]
 fn step7_export_preserves_github_source_verbatim() {
     let dir = tempdir().unwrap();
+    let home = tempdir().unwrap();
     let agentfile = "[agix]\ncli = [\"claude\"]\n\n\
          [dependencies]\n\
          gh-pkg = { source = \"github:fantoine/claude-later@main\" }\n";
     std::fs::write(dir.path().join("Agentfile"), agentfile).unwrap();
 
     let out = dir.path().join("state.zip");
-    Command::cargo_bin("agix")
-        .unwrap()
+    helpers::cmd_non_interactive(home.path())
         .current_dir(dir.path())
         .args(["export", "--output"])
         .arg(&out)
@@ -149,14 +152,14 @@ fn step7_export_preserves_github_source_verbatim() {
 #[test]
 fn step8_export_preserves_marketplace_source_verbatim() {
     let dir = tempdir().unwrap();
+    let home = tempdir().unwrap();
     let agentfile = "[agix]\ncli = [\"claude\"]\n\n\
          [dependencies]\n\
          mkt-pkg = { source = \"marketplace:fantoine/claude-plugins@roundtable\" }\n";
     std::fs::write(dir.path().join("Agentfile"), agentfile).unwrap();
 
     let out = dir.path().join("state.zip");
-    Command::cargo_bin("agix")
-        .unwrap()
+    helpers::cmd_non_interactive(home.path())
         .current_dir(dir.path())
         .args(["export", "--output"])
         .arg(&out)

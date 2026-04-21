@@ -1,27 +1,9 @@
-use assert_cmd::Command;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use tempfile::{tempdir, TempDir};
 
-/// Pre-seeded `agix` command for `remove` tests: always non-interactive and
-/// bound to a scratch `HOME` so driver uninstalls never touch the host.
-fn remove_cmd(cwd: &Path, home: &Path) -> Command {
-    let mut cmd = Command::cargo_bin("agix").unwrap();
-    cmd.env("AGIX_NO_INTERACTIVE", "1")
-        .env("HOME", home)
-        .current_dir(cwd);
-    cmd
-}
-
-/// Same seeding for the `install` preamble used by most remove scenarios.
-fn install_cmd(cwd: &Path, home: &Path) -> Command {
-    let mut cmd = Command::cargo_bin("agix").unwrap();
-    cmd.env("AGIX_NO_INTERACTIVE", "1")
-        .env("HOME", home)
-        .current_dir(cwd);
-    cmd
-}
+mod helpers;
 
 /// Create a scratch workspace + HOME + local package dir containing a skill.
 fn setup_workspace() -> (TempDir, TempDir, TempDir) {
@@ -63,7 +45,8 @@ my-pkg = {{ source = "local:{}" }}
     );
     fs::write(cwd.path().join("Agentfile"), &manifest).unwrap();
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .success();
@@ -72,7 +55,8 @@ my-pkg = {{ source = "local:{}" }}
     let lock_before = fs::read_to_string(cwd.path().join("Agentfile.lock")).unwrap();
     assert!(lock_before.contains("my-pkg"), "expected my-pkg in lock");
 
-    remove_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["remove", "my-pkg"])
         .assert()
         .success();
@@ -110,12 +94,14 @@ my-pkg = {{ source = "local:{0}" }}
     );
     fs::write(cwd.path().join("Agentfile"), &manifest).unwrap();
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .success();
 
-    remove_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["remove", "my-pkg", "--cli", "claude"])
         .assert()
         .success();
@@ -151,7 +137,8 @@ async fn step4_remove_nonexistent_package_fails_with_clear_error() {
     )
     .unwrap();
 
-    remove_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["remove", "ghost-pkg"])
         .assert()
         .failure()
@@ -182,7 +169,8 @@ my-pkg = {{ source = "local:{}" }}
     // No install → no lock file present.
     assert!(!cwd.path().join("Agentfile.lock").exists());
 
-    remove_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["remove", "my-pkg"])
         .assert()
         .success()
@@ -213,7 +201,8 @@ my-pkg = {{ source = "local:{}" }}
     );
     fs::write(cwd.path().join("Agentfile"), &manifest).unwrap();
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .success();
@@ -240,7 +229,8 @@ my-pkg = {{ source = "local:{}" }}
         "expected codex file at {codex_skill:?}"
     );
 
-    remove_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["remove", "my-pkg"])
         .assert()
         .success();
@@ -282,7 +272,8 @@ my-pkg = {{ source = "local:{}" }}
     );
     fs::write(global_dir.join("Agentfile"), &manifest).unwrap();
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["install", "--scope", "global"])
         .assert()
         .success();
@@ -294,7 +285,8 @@ my-pkg = {{ source = "local:{}" }}
         "expected installed file at {claude_global_skill:?}"
     );
 
-    remove_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["remove", "my-pkg", "--scope", "global"])
         .assert()
         .success();
@@ -336,7 +328,8 @@ async fn step8_remove_marketplace_plugin_invokes_claude_uninstall() {
         std::env::var("PATH").unwrap_or_default()
     );
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .env("PATH", &path_env)
         .arg("install")
         .assert()
@@ -346,7 +339,8 @@ async fn step8_remove_marketplace_plugin_invokes_claude_uninstall() {
     let log = fs::read_to_string(&log_path).unwrap();
     assert!(log.contains("plugin install roundtable@fantoine/claude-plugins"));
 
-    remove_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .env("PATH", &path_env)
         .args(["remove", "roundtable"])
         .assert()
@@ -395,13 +389,15 @@ my-pkg = {{ source = "local:{}" }}
     );
     fs::write(cwd.path().join("Agentfile"), &manifest).unwrap();
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .success();
 
     // --cli legacy-cli: no section exists → no-op, but no error.
-    remove_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["remove", "my-pkg", "--cli", "legacy-cli"])
         .assert()
         .success();

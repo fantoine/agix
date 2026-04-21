@@ -1,7 +1,8 @@
-use assert_cmd::Command;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use tempfile::tempdir;
+
+mod helpers;
 
 /// Smoke test: `agix add marketplace ...` invokes the `claude` CLI correctly.
 /// Uses a shim `claude` on PATH that records arguments — no network, no real
@@ -28,10 +29,7 @@ fn add_marketplace_invokes_claude_cli_for_install() {
         std::env::var("PATH").unwrap_or_default()
     );
 
-    Command::cargo_bin("agix")
-        .unwrap()
-        .env("AGIX_NO_INTERACTIVE", "1")
-        .env("HOME", home.path())
+    helpers::cmd_non_interactive(home.path())
         .env("PATH", &path_env)
         .current_dir(cwd.path())
         .args(["add", "marketplace", "fantoine/claude-plugins@roundtable"])

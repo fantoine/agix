@@ -1,18 +1,8 @@
-use assert_cmd::Command;
 use predicates::prelude::*;
 use std::fs;
 use tempfile::tempdir;
 
-// Shared hermetic-run helper matching the other command suites: tempdir cwd +
-// tempdir HOME + AGIX_NO_INTERACTIVE=1. Without this the command can read or
-// write into the developer's real $HOME during auto-init flows.
-fn outdated_cmd(cwd: &std::path::Path, home: &std::path::Path) -> Command {
-    let mut cmd = Command::cargo_bin("agix").unwrap();
-    cmd.env("AGIX_NO_INTERACTIVE", "1")
-        .env("HOME", home)
-        .current_dir(cwd);
-    cmd
-}
+mod helpers;
 
 // ---------------------------------------------------------------------------
 // Step 5: no Agentfile — exit non-zero with an actionable message.
@@ -23,7 +13,8 @@ fn step5_outdated_without_agentfile_exits_non_zero() {
     let cwd = tempdir().unwrap();
     let home = tempdir().unwrap();
 
-    outdated_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("outdated")
         .assert()
         .failure()
@@ -53,7 +44,8 @@ some-dep = { source = "local:/tmp/x" }
     .unwrap();
     // Deliberately no Agentfile.lock.
 
-    outdated_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("outdated")
         .assert()
         .failure()
@@ -97,7 +89,8 @@ files = []
     )
     .unwrap();
 
-    outdated_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("outdated")
         .assert()
         .success()
@@ -137,7 +130,8 @@ files = []
     )
     .unwrap();
 
-    outdated_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("outdated")
         .assert()
         .success()

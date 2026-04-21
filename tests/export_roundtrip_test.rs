@@ -1,5 +1,6 @@
-use assert_cmd::Command;
 use tempfile::tempdir;
+
+mod helpers;
 
 #[test]
 fn export_zip_is_self_contained_and_installable() {
@@ -9,6 +10,7 @@ fn export_zip_is_self_contained_and_installable() {
     std::fs::write(src_dir.path().join("skills/s.md"), "# s").unwrap();
 
     let proj = tempdir().unwrap();
+    let home = tempdir().unwrap();
     std::fs::write(
         proj.path().join("Agentfile"),
         format!(
@@ -19,22 +21,18 @@ fn export_zip_is_self_contained_and_installable() {
     .unwrap();
 
     // 1. Install
-    Command::cargo_bin("agix")
-        .unwrap()
+    helpers::cmd_non_interactive(home.path())
         .current_dir(proj.path())
         .args(["install"])
-        .env("AGIX_NO_INTERACTIVE", "1")
         .assert()
         .success();
 
     // 2. Export
     let out = proj.path().join("state.zip");
-    Command::cargo_bin("agix")
-        .unwrap()
+    helpers::cmd_non_interactive(home.path())
         .current_dir(proj.path())
         .args(["export", "--output"])
         .arg(&out)
-        .env("AGIX_NO_INTERACTIVE", "1")
         .assert()
         .success();
     assert!(out.exists(), "zip should be created");
@@ -58,11 +56,9 @@ fn export_zip_is_self_contained_and_installable() {
         .exists());
 
     // 5. Install in the unzipped dir should succeed
-    Command::cargo_bin("agix")
-        .unwrap()
+    helpers::cmd_non_interactive(home.path())
         .current_dir(target.path())
         .args(["install"])
-        .env("AGIX_NO_INTERACTIVE", "1")
         .assert()
         .success();
 }

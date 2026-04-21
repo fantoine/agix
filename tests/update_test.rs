@@ -1,9 +1,10 @@
 use agix::core::lock::LockFile;
-use assert_cmd::Command;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use tempfile::{tempdir, TempDir};
+
+mod helpers;
 
 // ---------------------------------------------------------------------------
 // Existing smoke coverage (kept from earlier versions)
@@ -12,12 +13,10 @@ use tempfile::{tempdir, TempDir};
 #[test]
 fn update_fails_without_agentfile() {
     let dir = tempdir().unwrap();
+    let home = tempdir().unwrap();
 
-    Command::cargo_bin("agix")
-        .unwrap()
+    helpers::cmd_non_interactive(home.path())
         .args(["update"])
-        .env("AGIX_NO_INTERACTIVE", "1")
-        .env("HOME", tempdir().unwrap().path())
         .current_dir(&dir)
         .assert()
         .failure();
@@ -36,11 +35,8 @@ cli = ["claude"]
     )
     .unwrap();
 
-    Command::cargo_bin("agix")
-        .unwrap()
+    helpers::cmd_non_interactive(home.path())
         .args(["update"])
-        .env("AGIX_NO_INTERACTIVE", "1")
-        .env("HOME", home.path())
         .current_dir(&dir)
         .assert()
         .success()
@@ -50,35 +46,13 @@ cli = ["claude"]
 #[test]
 fn update_single_package_fails_without_agentfile() {
     let dir = tempdir().unwrap();
+    let home = tempdir().unwrap();
 
-    Command::cargo_bin("agix")
-        .unwrap()
+    helpers::cmd_non_interactive(home.path())
         .args(["update", "claude-later"])
-        .env("AGIX_NO_INTERACTIVE", "1")
-        .env("HOME", tempdir().unwrap().path())
         .current_dir(&dir)
         .assert()
         .failure();
-}
-
-// ---------------------------------------------------------------------------
-// Task 13 step helpers (mirror tests/install_test.rs conventions)
-// ---------------------------------------------------------------------------
-
-fn update_cmd(cwd: &Path, home: &Path) -> Command {
-    let mut cmd = Command::cargo_bin("agix").unwrap();
-    cmd.env("AGIX_NO_INTERACTIVE", "1")
-        .env("HOME", home)
-        .current_dir(cwd);
-    cmd
-}
-
-fn install_cmd(cwd: &Path, home: &Path) -> Command {
-    let mut cmd = Command::cargo_bin("agix").unwrap();
-    cmd.env("AGIX_NO_INTERACTIVE", "1")
-        .env("HOME", home)
-        .current_dir(cwd);
-    cmd
 }
 
 fn write_agentfile(cwd: &Path, content: &str) {
@@ -147,7 +121,8 @@ dep-b = {{ source = "local:{}" }}
         ),
     );
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .success();
@@ -174,7 +149,8 @@ dep-b = {{ source = "local:{}" }}
     fs::write(pkg_a.path().join("skills").join("s.md"), "# skill a-v2").unwrap();
     fs::write(pkg_b.path().join("skills").join("s.md"), "# skill b-v2").unwrap();
 
-    update_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("update")
         .assert()
         .success()
@@ -239,7 +215,8 @@ dep-b = {{ source = "local:{}" }}
         ),
     );
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .success();
@@ -265,7 +242,8 @@ dep-b = {{ source = "local:{}" }}
     // Mutate only dep-a.
     fs::write(pkg_a.path().join("skills").join("s.md"), "# skill a-v2").unwrap();
 
-    update_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["update", "dep-a"])
         .assert()
         .success();
@@ -319,12 +297,14 @@ real-dep = {{ source = "local:{}" }}
         ),
     );
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .success();
 
-    update_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["update", "nope-not-there"])
         .assert()
         .failure()
@@ -355,7 +335,8 @@ local-dep = {{ source = "local:{}" }}
         ),
     );
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .success();
@@ -366,7 +347,8 @@ local-dep = {{ source = "local:{}" }}
     // Mutate source.
     fs::write(pkg.path().join("skills").join("s.md"), "# skill v2 updated").unwrap();
 
-    update_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["update", "local-dep"])
         .assert()
         .success();
@@ -408,7 +390,8 @@ mkt = { source = "marketplace:fantoine/claude-plugins@roundtable" }
 "#,
     );
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .env("PATH", path_with(bin_dir.path()))
         .arg("install")
         .assert()
@@ -417,7 +400,8 @@ mkt = { source = "marketplace:fantoine/claude-plugins@roundtable" }
     // Reset the log so we can assert exactly what `update` invokes.
     fs::write(&log, "").unwrap();
 
-    update_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .env("PATH", path_with(bin_dir.path()))
         .args(["update", "mkt"])
         .assert()
@@ -475,7 +459,8 @@ fresh = {{ source = "local:{}" }}
     // No prior install → no Agentfile.lock.
     assert!(!cwd.path().join("Agentfile.lock").exists());
 
-    update_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("update")
         .assert()
         .success();
@@ -507,7 +492,8 @@ fresh = {{ source = "local:{}" }}
 
     assert!(!cwd.path().join("Agentfile.lock").exists());
 
-    update_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["update", "fresh"])
         .assert()
         .failure()

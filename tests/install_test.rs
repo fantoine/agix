@@ -2,12 +2,13 @@ use agix::core::installer::Installer;
 use agix::core::lock::LockFile;
 use agix::drivers::Scope;
 use agix::manifest::agentfile::ProjectManifest;
-use assert_cmd::Command;
 use predicates::prelude::*;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use tempfile::{tempdir, TempDir};
+
+mod helpers;
 
 // ---------------------------------------------------------------------------
 // Existing smoke coverage (kept from earlier versions)
@@ -65,29 +66,18 @@ my-pkg = {{ source = "local:{}" }}
     );
     std::fs::write(dir.path().join("Agentfile"), &manifest_str).unwrap();
 
-    let mut cmd = Command::cargo_bin("agix").unwrap();
-    cmd.env("AGIX_NO_INTERACTIVE", "1")
-        .env("HOME", tempdir().unwrap().path())
+    let home = tempdir().unwrap();
+    helpers::cmd_non_interactive(home.path())
         .current_dir(dir.path())
-        .arg("install");
-    cmd.assert().success();
+        .arg("install")
+        .assert()
+        .success();
     assert!(dir.path().join("Agentfile.lock").exists());
 }
 
 // ---------------------------------------------------------------------------
 // Task 12 step helpers
 // ---------------------------------------------------------------------------
-
-/// Pre-seeded `agix install` command: non-interactive and bound to a scratch
-/// `HOME` so local-scope `.claude/` installs land inside `cwd` (tempdir) and
-/// global-scope installs land inside `home` (also tempdir).
-fn install_cmd(cwd: &Path, home: &Path) -> Command {
-    let mut cmd = Command::cargo_bin("agix").unwrap();
-    cmd.env("AGIX_NO_INTERACTIVE", "1")
-        .env("HOME", home)
-        .current_dir(cwd);
-    cmd
-}
 
 fn write_agentfile(cwd: &Path, content: &str) {
     fs::write(cwd.join("Agentfile"), content).unwrap();
@@ -152,7 +142,8 @@ full = {{ source = "local:{}" }}
         ),
     );
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .success();
@@ -189,13 +180,15 @@ full = {{ source = "local:{}" }}
         ),
     );
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .success();
     let lock1 = fs::read_to_string(cwd.path().join("Agentfile.lock")).unwrap();
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .success();
@@ -237,7 +230,8 @@ full = {{ source = "local:{}" }}
         ),
     );
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .success();
@@ -248,7 +242,8 @@ full = {{ source = "local:{}" }}
     // Mutate a source file and reinstall.
     fs::write(pkg.path().join("skills").join("a.md"), "# skill a v2").unwrap();
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .success();
@@ -306,7 +301,8 @@ from-git = {{ source = "git:{url}", version = "main" }}
         ),
     );
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .success();
@@ -363,7 +359,8 @@ market-dep = {{ source = "marketplace:fantoine/claude-plugins@roundtable" }}
         ),
     );
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .env("PATH", path_with(bin_dir.path()))
         .arg("install")
         .assert()
@@ -418,7 +415,8 @@ codex-only = {{ source = "local:{}" }}
         ),
     );
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .success();
@@ -474,7 +472,8 @@ shared = {{ source = "local:{}", exclude = ["codex"] }}
         ),
     );
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .success();
@@ -509,7 +508,8 @@ fn step9_install_without_agentfile_exits_nonzero() {
     let cwd = tempdir().unwrap();
     let home = tempdir().unwrap();
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .failure();
@@ -533,7 +533,8 @@ broken = { source = "nope:whatever" }
 "#,
     );
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .failure()
@@ -575,7 +576,8 @@ orphan = {{ source = "local:{}" }}
     // `claude` happens to live in /usr/bin).
     let empty_bin = tempdir().unwrap();
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .env("PATH", empty_bin.path())
         .arg("install")
         .assert()
@@ -644,7 +646,8 @@ hooked = {{ source = "local:{}" }}
         ),
     );
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("install")
         .assert()
         .success();
@@ -690,7 +693,8 @@ repeat = { source = "marketplace:fantoine/claude-plugins@roundtable" }
 "#,
     );
 
-    install_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .env("PATH", path_with(bin_dir.path()))
         .arg("install")
         .assert()

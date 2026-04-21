@@ -1,18 +1,9 @@
-use assert_cmd::Command;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use tempfile::{tempdir, TempDir};
 
-/// Pre-seeded `agix` command for `add` tests: always non-interactive and
-/// bound to a scratch `HOME` so driver installs never touch the host.
-fn add_cmd(cwd: &Path, home: &Path) -> Command {
-    let mut cmd = Command::cargo_bin("agix").unwrap();
-    cmd.env("AGIX_NO_INTERACTIVE", "1")
-        .env("HOME", home)
-        .current_dir(cwd);
-    cmd
-}
+mod helpers;
 
 /// Create a cwd with a minimal Agentfile plus a tempdir HOME. Returns both
 /// tempdirs (keep alive for the test duration) and a local package dir.
@@ -34,7 +25,8 @@ fn setup_with_agentfile(cli_line: &str) -> (TempDir, TempDir, TempDir) {
 #[test]
 fn step2_add_local_shared_dep_writes_to_top_level_dependencies() {
     let (cwd, home, pkg) = setup_with_agentfile("\"claude\"");
-    add_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("add")
         .arg("local")
         .arg(pkg.path())
@@ -52,7 +44,8 @@ fn step2_add_local_shared_dep_writes_to_top_level_dependencies() {
 #[test]
 fn step3_add_local_single_cli_writes_per_cli_section() {
     let (cwd, home, pkg) = setup_with_agentfile("\"claude\"");
-    add_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["add", "local"])
         .arg(pkg.path())
         .args(["--cli", "claude"])
@@ -68,7 +61,8 @@ fn step3_add_local_single_cli_writes_per_cli_section() {
 #[test]
 fn step4_add_local_multi_cli_writes_under_each_section() {
     let (cwd, home, pkg) = setup_with_agentfile("\"claude\", \"codex\"");
-    add_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["add", "local"])
         .arg(pkg.path())
         .args(["--cli", "claude", "--cli", "codex"])
@@ -85,7 +79,8 @@ fn step4_add_local_multi_cli_writes_under_each_section() {
 #[test]
 fn step5_add_local_unknown_cli_errors_with_known_drivers_listed() {
     let (cwd, home, pkg) = setup_with_agentfile("\"claude\"");
-    add_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["add", "local"])
         .arg(pkg.path())
         .args(["--cli", "not-in-agix-cli"])
@@ -131,7 +126,8 @@ fn step8_add_git_from_local_bare_repo_succeeds() {
     fs::write(cwd.path().join("Agentfile"), "[agix]\ncli = []\n").unwrap();
 
     let url = format!("file://{}", src.path().display());
-    add_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["add", "git", &url])
         .assert()
         .success();
@@ -169,7 +165,8 @@ fn step9_add_marketplace_local_scope_invokes_claude_shim() {
         std::env::var("PATH").unwrap_or_default()
     );
 
-    add_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .env("PATH", &path_env)
         .args(["add", "marketplace", "fantoine/claude-plugins@roundtable"])
         .assert()
@@ -198,7 +195,8 @@ fn step10_add_marketplace_global_scope_auto_inits_non_interactively() {
         std::env::var("PATH").unwrap_or_default()
     );
 
-    add_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .env("PATH", &path_env)
         .args([
             "add",
@@ -230,7 +228,8 @@ fn step11_add_without_agentfile_errors_mentioning_init() {
     let pkg = tempdir().unwrap();
     fs::write(pkg.path().join("skill.md"), "# s").unwrap();
 
-    add_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("add")
         .arg("local")
         .arg(pkg.path())
@@ -248,7 +247,8 @@ fn step12_add_unknown_source_type_errors_with_known_schemes_listed() {
     let home = tempdir().unwrap();
     fs::write(cwd.path().join("Agentfile"), "[agix]\ncli = []\n").unwrap();
 
-    add_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["add", "ftp", "nope"])
         .assert()
         .failure()
@@ -265,14 +265,16 @@ fn step12_add_unknown_source_type_errors_with_known_schemes_listed() {
 fn step13_add_same_local_twice_warns_and_overwrites() {
     let (cwd, home, pkg) = setup_with_agentfile("\"claude\"");
 
-    add_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("add")
         .arg("local")
         .arg(pkg.path())
         .assert()
         .success();
 
-    add_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("add")
         .arg("local")
         .arg(pkg.path())
@@ -305,14 +307,16 @@ fn step13_add_same_local_twice_warns_and_overwrites() {
 fn step13_add_same_cli_scoped_twice_warns_and_overwrites() {
     let (cwd, home, pkg) = setup_with_agentfile("\"claude\"");
 
-    add_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["add", "local"])
         .arg(pkg.path())
         .args(["--cli", "claude"])
         .assert()
         .success();
 
-    add_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["add", "local"])
         .arg(pkg.path())
         .args(["--cli", "claude"])
@@ -332,7 +336,8 @@ fn step14_suggested_name_local_strips_extension_and_uses_basename() {
     // Plan text "strips extension" refers to archive-like sources, not local dirs;
     // keep this test honest: a dir path yields the dir name verbatim.
     let (cwd, home, pkg) = setup_with_agentfile("\"claude\"");
-    add_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("add")
         .arg("local")
         .arg(pkg.path())
@@ -378,7 +383,8 @@ fn step14_suggested_name_git_uses_last_path_minus_dotgit() {
     fs::write(cwd.path().join("Agentfile"), "[agix]\ncli = []\n").unwrap();
 
     let url = format!("file://{}", fake_git_path.display());
-    add_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .args(["add", "git", &url])
         .assert()
         .success();
@@ -419,7 +425,8 @@ fn step14_suggested_name_marketplace_uses_plugin_name() {
         std::env::var("PATH").unwrap_or_default()
     );
 
-    add_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .env("PATH", &path_env)
         .args(["add", "marketplace", "fantoine/claude-plugins@roundtable"])
         .assert()
@@ -452,7 +459,8 @@ fn regression_marketplace_total_failure_returns_nonzero() {
         std::env::var("PATH").unwrap_or_default()
     );
 
-    add_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .env("PATH", &path_env)
         .args(["add", "marketplace", "org/repo@plugin"])
         .assert()
@@ -485,7 +493,8 @@ fn regression_global_auto_init_honors_non_interactive_env_var() {
     // `agentfile_paths` would historically call `pick_clis(&[], false)` and
     // block; now it forwards the non-interactive state and
     // `AGIX_NO_INTERACTIVE=1` still applies. The command MUST NOT hang.
-    add_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .env("PATH", &path_env)
         .args([
             "add",

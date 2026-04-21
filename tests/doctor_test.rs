@@ -1,18 +1,8 @@
-use assert_cmd::Command;
 use predicates::prelude::*;
 use std::fs;
 use tempfile::tempdir;
 
-// Shared hermetic-run helper matching the other command suites: tempdir cwd +
-// tempdir HOME + AGIX_NO_INTERACTIVE=1 keeps `doctor` from auto-detecting the
-// developer's real `~/.claude` or `~/.codex` and from blocking on any prompt.
-fn doctor_cmd(cwd: &std::path::Path, home: &std::path::Path) -> Command {
-    let mut cmd = Command::cargo_bin("agix").unwrap();
-    cmd.env("AGIX_NO_INTERACTIVE", "1")
-        .env("HOME", home)
-        .current_dir(cwd);
-    cmd
-}
+mod helpers;
 
 // ---------------------------------------------------------------------------
 // Step 2: clean system — every registered driver appears with a
@@ -24,7 +14,8 @@ fn step2_doctor_without_agentfile_warns_and_exits_zero() {
     let cwd = tempdir().unwrap();
     let home = tempdir().unwrap();
 
-    doctor_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("doctor")
         .assert()
         .success()
@@ -46,7 +37,8 @@ cli = ["claude"]
     // With $HOME pointing at an empty tempdir and no `.claude` / `.codex` in
     // cwd, both drivers must still be listed — doctor reports *every* driver,
     // not just the ones the manifest targets.
-    doctor_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("doctor")
         .assert()
         .success()
@@ -73,7 +65,8 @@ cli = ["claude"]
     .unwrap();
     fs::create_dir(cwd.path().join(".claude")).unwrap();
 
-    doctor_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("doctor")
         .assert()
         .success()
@@ -98,7 +91,8 @@ cli = ["codex"]
     .unwrap();
     fs::create_dir(cwd.path().join(".codex")).unwrap();
 
-    doctor_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("doctor")
         .assert()
         .success()
@@ -122,7 +116,8 @@ cli = ["claude"]
     )
     .unwrap();
 
-    doctor_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("doctor")
         .assert()
         .success()
@@ -148,7 +143,8 @@ cli = ["claude"]
     )
     .unwrap();
 
-    doctor_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("doctor")
         .assert()
         .failure()
@@ -176,7 +172,8 @@ some-dep = { source = "local:/tmp/x" }
     .unwrap();
     // Deliberately no Agentfile.lock.
 
-    doctor_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("doctor")
         .assert()
         .success()
@@ -219,7 +216,8 @@ files = []
     )
     .unwrap();
 
-    doctor_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("doctor")
         .assert()
         .success()
@@ -260,7 +258,8 @@ dest = "/nonexistent/path/that/does/not/exist.md"
     )
     .unwrap();
 
-    doctor_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("doctor")
         .assert()
         .success()
@@ -306,7 +305,8 @@ dest = {dest:?}
     )
     .unwrap();
 
-    doctor_cmd(cwd.path(), home.path())
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
         .arg("doctor")
         .assert()
         .success()
