@@ -7,24 +7,50 @@ use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
 use crate::error::{AgixError, Result};
 use crate::sources::{FetchOutcome, Source, SourceScheme};
 
+const DEFAULT_API_BASE: &str = "https://api.github.com";
+const DEFAULT_WEB_BASE: &str = "https://github.com";
+const BASE_URL_ENV_VAR: &str = "AGIX_GITHUB_BASE_URL";
+
 pub struct GitHubSource {
     org: String,
     repo: String,
     ref_str: Option<String>,
     api_base: String,
+    web_base: String,
+}
+
+/// Pick the `(api_base, web_base)` pair honouring, in order:
+/// 1. an explicit caller override (both bases collapse to it — suitable for a
+///    single mockito server that answers both the API and the archive URL);
+/// 2. the `AGIX_GITHUB_BASE_URL` env var (same collapsing semantics);
+/// 3. the production defaults (`api.github.com` + `github.com`).
+fn resolve_bases(override_base: Option<&str>) -> (String, String) {
+    if let Some(base) = override_base {
+        return (base.to_owned(), base.to_owned());
+    }
+    if let Ok(env_base) = std::env::var(BASE_URL_ENV_VAR) {
+        if !env_base.is_empty() {
+            return (env_base.clone(), env_base);
+        }
+    }
+    (DEFAULT_API_BASE.to_owned(), DEFAULT_WEB_BASE.to_owned())
 }
 
 impl GitHubSource {
     pub fn new(org: &str, repo: &str, ref_str: Option<&str>) -> Self {
+        let (api_base, web_base) = resolve_bases(None);
         Self {
             org: org.to_owned(),
             repo: repo.to_owned(),
             ref_str: ref_str.map(str::to_owned),
-            api_base: "https://api.github.com".to_owned(),
+            api_base,
+            web_base,
         }
     }
 
-    /// Constructor with configurable API base — intended for tests (e.g. mockito).
+    /// Constructor with configurable base URL — intended for tests (e.g. mockito).
+    /// Sets both `api_base` and `web_base` to `base`, so a single mock server
+    /// can answer the API lookup and the archive download.
     #[cfg(test)]
     pub fn new_with_base(org: &str, repo: &str, ref_str: Option<&str>, base: &str) -> Self {
         Self {
@@ -32,28 +58,30 @@ impl GitHubSource {
             repo: repo.to_owned(),
             ref_str: ref_str.map(str::to_owned),
             api_base: base.to_owned(),
+            web_base: base.to_owned(),
         }
     }
 
-    /// Like [`GitHubSource::new`], but lets a caller override the GitHub API
-    /// base URL. Used by `outdated` so integration tests can redirect HTTP
-    /// calls to a mockito server without having to wire a full env-var seam
-    /// through the CLI (that refactor is tracked as a deferred finding).
+    /// Like [`GitHubSource::new`], but lets a caller override the GitHub base
+    /// URL. When `base` is `Some`, both API and archive calls go there;
+    /// when `None`, the env-var + production defaults apply (see
+    /// [`resolve_bases`]).
     ///
-    /// Passing `None` is equivalent to [`GitHubSource::new`].
+    /// Used by `outdated` so integration tests can redirect HTTP calls to a
+    /// mockito server.
     pub fn new_with_optional_base(
         org: &str,
         repo: &str,
         ref_str: Option<&str>,
         base: Option<&str>,
     ) -> Self {
+        let (api_base, web_base) = resolve_bases(base);
         Self {
             org: org.to_owned(),
             repo: repo.to_owned(),
             ref_str: ref_str.map(str::to_owned),
-            api_base: base
-                .map(str::to_owned)
-                .unwrap_or_else(|| "https://api.github.com".to_owned()),
+            api_base,
+            web_base,
         }
     }
 
@@ -155,8 +183,8 @@ impl Source for GitHubSource {
         let sha = self.resolve_ref().await?;
 
         let zip_url = format!(
-            "https://github.com/{}/{}/archive/{}.zip",
-            self.org, self.repo, sha
+            "{}/{}/{}/archive/{}.zip",
+            self.web_base, self.org, self.repo, sha
         );
 
         let resp = reqwest::get(&zip_url).await.map_err(AgixError::Http)?;
@@ -319,4 +347,97 @@ mod tests {
         let dir = tempdir().unwrap();
         assert!(dir.path().exists());
     }
+
+    /// Build a minimal zip whose entries mimic the prefix GitHub adds to
+    /// `/archive/<sha>.zip` downloads (`<repo>-<sha>/...`).
+    fn build_github_style_zip() -> Vec<u8> {
+        use std::io::Write as _;
+        let mut buf = Vec::new();
+        {
+            let cursor = std::io::Cursor::new(&mut buf);
+            let mut writer = zip::ZipWriter::new(cursor);
+            let options: zip::write::FileOptions<()> = zip::write::FileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
+            writer
+                .start_file("repo-abc1234/README.md", options)
+                .unwrap();
+            writer.write_all(b"# hello").unwrap();
+            writer.finish().unwrap();
+        }
+        buf
+    }
+
+    #[tokio::test]
+    async fn fetch_uses_web_base_for_archive() {
+        let mut server = mockito::Server::new_async().await;
+        let sha = "abc123def456abc123def456abc123def456abc1";
+
+        let mock_tag = server
+            .mock("GET", "/repos/org/repo/git/ref/tags/v1.0.0")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(format!(r#"{{"object":{{"sha":"{sha}"}}}}"#))
+            .create_async()
+            .await;
+
+        let mock_archive = server
+            .mock("GET", format!("/org/repo/archive/{sha}.zip").as_str())
+            .with_status(200)
+            .with_header("content-type", "application/zip")
+            .with_body(build_github_style_zip())
+            .create_async()
+            .await;
+
+        let source = GitHubSource::new_with_base("org", "repo", Some("v1.0.0"), &server.url());
+        let dest = tempdir().unwrap();
+        let outcome = source.fetch(dest.path()).await.unwrap();
+
+        mock_tag.assert_async().await;
+        mock_archive.assert_async().await;
+
+        match outcome {
+            FetchOutcome::Fetched {
+                sha: fetched_sha, ..
+            } => {
+                assert_eq!(fetched_sha.as_deref(), Some(sha));
+            }
+            other => panic!("unexpected FetchOutcome: {other:?}"),
+        }
+        assert!(dest.path().join("README.md").exists());
+    }
+
+    #[test]
+    fn env_var_overrides_default_bases() {
+        // Guard: serialise env-var mutation in case other tests in this binary
+        // also touch it. `resolve_bases` reads the var eagerly.
+        let _lock = ENV_GUARD.lock().unwrap();
+        std::env::set_var(BASE_URL_ENV_VAR, "http://127.0.0.1:9999");
+        let (api, web) = resolve_bases(None);
+        std::env::remove_var(BASE_URL_ENV_VAR);
+        assert_eq!(api, "http://127.0.0.1:9999");
+        assert_eq!(web, "http://127.0.0.1:9999");
+    }
+
+    #[test]
+    fn explicit_override_wins_over_env_var() {
+        let _lock = ENV_GUARD.lock().unwrap();
+        std::env::set_var(BASE_URL_ENV_VAR, "http://env-base.invalid");
+        let (api, web) = resolve_bases(Some("http://explicit.invalid"));
+        std::env::remove_var(BASE_URL_ENV_VAR);
+        assert_eq!(api, "http://explicit.invalid");
+        assert_eq!(web, "http://explicit.invalid");
+    }
+
+    #[test]
+    fn defaults_when_env_var_unset() {
+        let _lock = ENV_GUARD.lock().unwrap();
+        std::env::remove_var(BASE_URL_ENV_VAR);
+        let (api, web) = resolve_bases(None);
+        assert_eq!(api, DEFAULT_API_BASE);
+        assert_eq!(web, DEFAULT_WEB_BASE);
+    }
+
+    // Serialise tests that mutate AGIX_GITHUB_BASE_URL — cargo runs tests in
+    // the same binary on multiple threads, and env vars are process-wide.
+    static ENV_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
 }

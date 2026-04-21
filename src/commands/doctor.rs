@@ -38,6 +38,20 @@ pub async fn run() -> anyhow::Result<()> {
         println!("  - {}: {} | {}", driver.name(), global, local);
     }
 
+    // Git support: libgit2 is statically linked (always available); the git
+    // CLI is optional and purely informational.
+    let git = crate::sources::git::detect_git_support();
+    crate::output::info("Git support:");
+    println!("  - libgit2: {}", git.libgit2_version);
+    println!(
+        "  - git CLI: {}",
+        if git.cli_available {
+            "detected"
+        } else {
+            "not detected (optional)"
+        }
+    );
+
     // Lock-file state. Without a baseline we can't check installed-file
     // presence, so we report the absence and point at `agix install` rather
     // than silently running the (no-op) loop and printing a false

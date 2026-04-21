@@ -21,7 +21,9 @@ pub enum OutdatedStatus {
     Local { name: String },
     /// Marketplace source — update path is owned by the CLI driver.
     Marketplace { name: String, driver: String },
-    /// Git (non-github) source — remote ref resolution not implemented yet.
+    /// Git (non-github) source — kept for rendering backwards-compat with
+    /// pre-A2 locks. No longer emitted by [`check_outdated`] (git sources now
+    /// go through [`crate::sources::git::GitSource::resolve_ref`]).
     GitNotCheckable { name: String },
     /// Lock entry has no SHA to compare against (pre-Phase-A lock, broken
     /// install, etc.).
@@ -138,12 +140,41 @@ async fn resolve_one(
             driver,
         };
     }
-    if pkg.source.starts_with("git:") {
-        // Plain git sources (non-github) have no lightweight ref-resolve path:
-        // `GitSource::fetch` shells out to libgit2 with a full clone, which is
-        // too heavy for `outdated`. We label and move on; the gap is logged.
-        return OutdatedStatus::GitNotCheckable {
-            name: pkg.name.clone(),
+    if let Some(payload) = pkg.source.strip_prefix("git:") {
+        // Plain git sources: use `GitSource::resolve_ref` (libgit2 ls-remote)
+        // to get the target SHA without cloning. Errors become
+        // `ResolveFailed` so one unreachable remote doesn't poison the rest
+        // of the report.
+        let (url, embedded_ref) = match payload.split_once('@') {
+            Some((u, r)) => (u, Some(r)),
+            None => (payload, None),
+        };
+        let ref_str = manifest_version.or(embedded_ref);
+        let source = crate::sources::git::GitSource::new(url, ref_str);
+
+        let current = match pkg.sha.as_deref() {
+            Some(s) => s.to_string(),
+            None => {
+                return OutdatedStatus::UnknownCurrent {
+                    name: pkg.name.clone(),
+                };
+            }
+        };
+
+        return match source.resolve_ref().await {
+            Ok(available) if available == current => OutdatedStatus::UpToDate {
+                name: pkg.name.clone(),
+                sha: current,
+            },
+            Ok(available) => OutdatedStatus::Outdated {
+                name: pkg.name.clone(),
+                current_sha: current,
+                available_sha: available,
+            },
+            Err(e) => OutdatedStatus::ResolveFailed {
+                name: pkg.name.clone(),
+                error: e.to_string(),
+            },
         };
     }
     if !pkg.source.starts_with("github:") {
