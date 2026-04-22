@@ -138,15 +138,15 @@ fn step8_add_git_from_local_bare_repo_succeeds() {
 
 // ---------- Step 9: add marketplace → invokes claude CLI shim ----------
 
+/// Install a stateful `claude` shim inside `dir` and return the log path.
+///
+/// State files live in a `state/` subdir of `dir` so they share `dir`'s
+/// lifetime (tests pass a `TempDir`-owned path; dropping the TempDir
+/// cleans both the shim and its state together).
 fn write_claude_shim(dir: &Path) -> std::path::PathBuf {
     let log = dir.join("claude-invocations.log");
-    let shim = dir.join("claude");
-    fs::write(
-        &shim,
-        format!("#!/bin/sh\necho \"$@\" >> {}\nexit 0\n", log.display()),
-    )
-    .unwrap();
-    fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
+    let state = dir.join("state");
+    helpers::install_claude_shim(dir, &log, &state);
     log
 }
 
@@ -173,8 +173,11 @@ fn step9_add_marketplace_local_scope_invokes_claude_shim() {
         .success();
 
     let log = fs::read_to_string(&log_path).unwrap();
+    assert!(log.contains("plugin marketplace list --json"));
     assert!(log.contains("plugin marketplace add fantoine/claude-plugins"));
-    assert!(log.contains("plugin install roundtable@fantoine/claude-plugins"));
+    // Install uses the alias (basename `claude-plugins`), not the org/repo path.
+    assert!(log.contains("plugin install roundtable@claude-plugins"));
+    assert!(!log.contains("plugin install roundtable@fantoine/claude-plugins"));
 }
 
 // ---------- Step 10: add marketplace --scope global with fresh HOME ----------
@@ -436,6 +439,48 @@ fn step14_suggested_name_marketplace_uses_plugin_name() {
     assert!(
         content.contains("[dependencies.roundtable]") || content.contains("\nroundtable = "),
         "expected roundtable entry (subtable or bare-string form); got: {content}"
+    );
+}
+
+// ---------- Regression: add installs only the new dep, not the whole manifest ----------
+
+#[test]
+fn regression_add_marketplace_does_not_install_sibling_deps() {
+    // Agentfile starts with a *different* marketplace dep already declared.
+    // Running `add marketplace <new>` must process only the new dep — the
+    // sibling should be left alone (its install is the job of `agix install`).
+    let bin_dir = tempdir().unwrap();
+    let log_path = write_claude_shim(bin_dir.path());
+
+    let cwd = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    fs::write(
+        cwd.path().join("Agentfile"),
+        "[agix]\ncli = [\"claude\"]\n\n[dependencies]\ncaveman = { source = \"marketplace:JuliusBrussee/caveman@caveman\" }\n",
+    )
+    .unwrap();
+
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
+        .env("PATH", &path_env)
+        .args(["add", "marketplace", "fantoine/claude-plugins@later"])
+        .assert()
+        .success();
+
+    let log = fs::read_to_string(&log_path).unwrap();
+    assert!(
+        log.contains("plugin install later@claude-plugins"),
+        "expected the newly-added dep to be installed; got: {log}"
+    );
+    assert!(
+        !log.contains("caveman"),
+        "sibling dep must not be touched by `add`; got: {log}"
     );
 }
 

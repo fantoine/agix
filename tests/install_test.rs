@@ -101,13 +101,8 @@ fn build_full_pkg() -> TempDir {
 
 fn write_claude_shim(dir: &Path) -> PathBuf {
     let log = dir.join("claude-invocations.log");
-    let shim = dir.join("claude");
-    fs::write(
-        &shim,
-        format!("#!/bin/sh\necho \"$@\" >> {}\nexit 0\n", log.display()),
-    )
-    .unwrap();
-    fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
+    let state = dir.join("state");
+    helpers::install_claude_shim(dir, &log, &state);
     log
 }
 
@@ -378,8 +373,8 @@ market-dep = {{ source = "marketplace:fantoine/claude-plugins@roundtable" }}
     // Marketplace shim was invoked.
     let claude_log = fs::read_to_string(&log).unwrap();
     assert!(
-        claude_log.contains("plugin install roundtable@fantoine/claude-plugins"),
-        "expected marketplace install invocation; got: {claude_log}"
+        claude_log.contains("plugin install roundtable@claude-plugins"),
+        "expected alias-based marketplace install invocation; got: {claude_log}"
     );
 
     let lock = LockFile::from_file(&cwd.path().join("Agentfile.lock")).unwrap();
@@ -670,16 +665,25 @@ hooked = {{ source = "local:{}" }}
 
 #[test]
 fn regression_marketplace_reinstall_already_installed_is_silent_success() {
-    // Shim emits "Plugin already installed" on stderr and exits 1, mimicking
-    // Claude Code's behaviour when re-installing a registered plugin.
+    // Pre-populate the stateful shim's state as if the marketplace were
+    // registered and the plugin were already installed. agix must detect
+    // this via `list --json` and skip the mutating `plugin install` call,
+    // without surfacing an install-failed warning.
     let bin_dir = tempdir().unwrap();
-    let shim = bin_dir.path().join("claude");
+    let state = bin_dir.path().join("state");
+    fs::create_dir_all(&state).unwrap();
+    let log = bin_dir.path().join("claude-invocations.log");
+    helpers::install_claude_shim(bin_dir.path(), &log, &state);
     fs::write(
-        &shim,
-        "#!/bin/sh\necho 'Plugin already installed' 1>&2\nexit 1\n",
+        state.join("mkts.json"),
+        r#"[{"name":"claude-plugins","source":"github","repo":"fantoine/claude-plugins"}]"#,
     )
     .unwrap();
-    fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
+    fs::write(
+        state.join("plugins.json"),
+        r#"[{"id":"roundtable@claude-plugins","scope":"user"}]"#,
+    )
+    .unwrap();
 
     let cwd = tempdir().unwrap();
     let home = tempdir().unwrap();
@@ -699,6 +703,5 @@ repeat = { source = "marketplace:fantoine/claude-plugins@roundtable" }
         .arg("install")
         .assert()
         .success()
-        // No warn about install-failed should reach the user on this path.
         .stderr(predicates::str::contains("install failed for").not());
 }

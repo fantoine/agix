@@ -285,6 +285,40 @@ impl ProjectManifest {
             cli_dependencies: HashMap::new(),
         }
     }
+
+    /// Build a manifest that carries this manifest's `[agix]` section but
+    /// contains a single dependency entry. Useful when a command must drive
+    /// the installer for one specific dep (e.g. `agix add`) without replaying
+    /// every other dep already declared in the source Agentfile.
+    ///
+    /// When `cli_filter` is empty, the dep lands in `[dependencies]`; otherwise
+    /// it is registered under each `[<cli>.dependencies]` section listed.
+    pub fn single_dep_scoped(
+        &self,
+        name: &str,
+        dep: Dependency,
+        cli_filter: &[String],
+    ) -> ProjectManifest {
+        let mut dependencies: HashMap<String, Dependency> = HashMap::new();
+        let mut cli_dependencies: HashMap<String, HashMap<String, Dependency>> = HashMap::new();
+
+        if cli_filter.is_empty() {
+            dependencies.insert(name.to_string(), dep);
+        } else {
+            for cli in cli_filter {
+                cli_dependencies
+                    .entry(cli.clone())
+                    .or_default()
+                    .insert(name.to_string(), dep.clone());
+            }
+        }
+
+        ProjectManifest {
+            agix: self.agix.clone(),
+            dependencies,
+            cli_dependencies,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -2,23 +2,76 @@ use crate::constants::paths::CLAUDE_DIR;
 use crate::core::lock::InstalledFile;
 use crate::drivers::{CliDriver, FetchedPackage, Scope};
 use crate::error::{AgixError, Result};
+use serde::Deserialize;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 pub struct ClaudeDriver;
 
-/// Heuristic: `claude plugin {marketplace add,install}` exits non-zero when
-/// the target is already registered / installed. We inspect the combined
-/// output for known phrases so repeat runs stay idempotent ("silent success
-/// on re-install" per Task 4 review finding).
-///
-/// Matching is case-insensitive and tolerant of wording drift across Claude
-/// Code versions; a small number of recognised phrases is preferred over a
-/// catch-all to avoid swallowing genuine failures.
-fn is_already_exists(stdout: &[u8], stderr: &[u8]) -> bool {
-    let combined = [stdout, stderr].concat();
-    let text = String::from_utf8_lossy(&combined).to_lowercase();
-    const PHRASES: &[&str] = &["already installed", "already exists", "already added"];
-    PHRASES.iter().any(|p| text.contains(p))
+/// Entry as emitted by `claude plugin marketplace list --json`. We only
+/// capture the two fields we need: the marketplace's declared `name` (the
+/// alias used in `<plugin>@<alias>` when installing) and its `repo`
+/// (`<org>/<repo>` for github-sourced marketplaces, absent otherwise).
+#[derive(Debug, Deserialize)]
+struct MarketplaceEntry {
+    name: String,
+    #[serde(default)]
+    repo: Option<String>,
+}
+
+/// Entry as emitted by `claude plugin list --json`. The `id` has the form
+/// `<plugin>@<marketplace-alias>` — same string we'd pass to
+/// `claude plugin install`.
+#[derive(Debug, Deserialize)]
+struct PluginEntry {
+    id: String,
+}
+
+fn list_marketplaces() -> Result<Vec<MarketplaceEntry>> {
+    let output = Command::new("claude")
+        .args(["plugin", "marketplace", "list", "--json"])
+        .output()
+        .map_err(|e| AgixError::Other(format!("claude plugin marketplace list failed: {e}")))?;
+    if !output.status.success() {
+        return Err(AgixError::Other(format!(
+            "claude plugin marketplace list exited with {}",
+            output.status
+        )));
+    }
+    parse_marketplace_list(&output.stdout)
+}
+
+fn parse_marketplace_list(bytes: &[u8]) -> Result<Vec<MarketplaceEntry>> {
+    serde_json::from_slice(bytes)
+        .map_err(|e| AgixError::Other(format!("failed to parse marketplace list JSON: {e}")))
+}
+
+fn list_plugins() -> Result<Vec<PluginEntry>> {
+    let output = Command::new("claude")
+        .args(["plugin", "list", "--json"])
+        .output()
+        .map_err(|e| AgixError::Other(format!("claude plugin list failed: {e}")))?;
+    if !output.status.success() {
+        return Err(AgixError::Other(format!(
+            "claude plugin list exited with {}",
+            output.status
+        )));
+    }
+    parse_plugin_list(&output.stdout)
+}
+
+fn parse_plugin_list(bytes: &[u8]) -> Result<Vec<PluginEntry>> {
+    serde_json::from_slice(bytes)
+        .map_err(|e| AgixError::Other(format!("failed to parse plugin list JSON: {e}")))
+}
+
+/// Find the marketplace alias (`name`) registered with `repo == marketplace`.
+/// `None` when no such marketplace is registered yet.
+fn find_alias<'a>(entries: &'a [MarketplaceEntry], marketplace: &str) -> Option<&'a str> {
+    entries
+        .iter()
+        .find(|e| e.repo.as_deref() == Some(marketplace))
+        .map(|e| e.name.as_str())
 }
 
 fn copy_dir_all(src: &Path, dst: &Path, installed: &mut Vec<InstalledFile>) -> Result<()> {
@@ -158,39 +211,67 @@ impl CliDriver for ClaudeDriver {
         plugin: &str,
         _scope: &Scope,
     ) -> Result<Vec<InstalledFile>> {
-        use std::process::Command;
-
         if which::which("claude").is_err() {
             return Err(AgixError::Other(
                 "`claude` CLI not found in PATH — install Claude Code first".to_string(),
             ));
         }
 
-        // 1. Register the marketplace (idempotent per Claude Code docs).
-        let output = Command::new("claude")
-            .args(["plugin", "marketplace", "add", marketplace])
-            .output()
-            .map_err(|e| AgixError::Other(format!("claude plugin marketplace add failed: {e}")))?;
-        if !output.status.success() && !is_already_exists(&output.stdout, &output.stderr) {
-            return Err(AgixError::Other(format!(
-                "claude plugin marketplace add {marketplace} exited with {}",
-                output.status
-            )));
-        }
+        // 1. Resolve the marketplace alias. Claude identifies marketplaces by
+        //    a `name` declared in their `marketplace.json` (e.g. `fantoine-plugins`
+        //    for repo `fantoine/claude-plugins`), which is what `<plugin>@<alias>`
+        //    expects. That alias is not derivable from `org/repo`, so we must
+        //    read it back from `plugin marketplace list --json`.
+        let alias = {
+            let entries = list_marketplaces()?;
+            if let Some(alias) = find_alias(&entries, marketplace) {
+                println!("Marketplace {marketplace} already registered as '{alias}'");
+                alias.to_string()
+            } else {
+                let output = Command::new("claude")
+                    .args(["plugin", "marketplace", "add", marketplace])
+                    .output()
+                    .map_err(|e| {
+                        AgixError::Other(format!("claude plugin marketplace add failed: {e}"))
+                    })?;
+                if !output.status.success() {
+                    return Err(AgixError::Other(format!(
+                        "claude plugin marketplace add {marketplace} exited with {}",
+                        output.status
+                    )));
+                }
+                let entries = list_marketplaces()?;
+                let alias = find_alias(&entries, marketplace)
+                    .ok_or_else(|| {
+                        AgixError::Other(format!(
+                            "marketplace {marketplace} not found after add (claude's marketplace list did not pick it up)"
+                        ))
+                    })?
+                    .to_string();
+                println!("Registered marketplace {marketplace} as '{alias}'");
+                alias
+            }
+        };
 
-        // 2. Install the plugin (Claude's `<plugin>@<marketplace>` syntax).
-        //    Claude exits non-zero when the plugin is already installed; treat
-        //    that as success so repeated `agix install` runs are idempotent.
-        let plugin_ref = format!("{plugin}@{marketplace}");
-        let output = Command::new("claude")
-            .args(["plugin", "install", &plugin_ref])
-            .output()
-            .map_err(|e| AgixError::Other(format!("claude plugin install failed: {e}")))?;
-        if !output.status.success() && !is_already_exists(&output.stdout, &output.stderr) {
-            return Err(AgixError::Other(format!(
-                "claude plugin install {plugin_ref} exited with {}",
-                output.status
-            )));
+        // 2. Install the plugin, keyed by alias. Again check first so repeat
+        //    runs are a fast no-op instead of relying on string-matching the
+        //    CLI's error output.
+        let plugin_ref = format!("{plugin}@{alias}");
+        let plugins = list_plugins()?;
+        if plugins.iter().any(|p| p.id == plugin_ref) {
+            println!("Plugin {plugin_ref} already installed");
+        } else {
+            let output = Command::new("claude")
+                .args(["plugin", "install", &plugin_ref])
+                .output()
+                .map_err(|e| AgixError::Other(format!("claude plugin install failed: {e}")))?;
+            if !output.status.success() {
+                return Err(AgixError::Other(format!(
+                    "claude plugin install {plugin_ref} exited with {}",
+                    output.status
+                )));
+            }
+            println!("Installed plugin {plugin_ref}");
         }
 
         // Claude Code manages its own files; we track only plugin identity in the lock.
@@ -198,8 +279,21 @@ impl CliDriver for ClaudeDriver {
     }
 
     fn uninstall_marketplace_plugin(&self, marketplace: &str, plugin: &str) -> Result<()> {
-        use std::process::Command;
-        let plugin_ref = format!("{plugin}@{marketplace}");
+        // Resolve alias; if the marketplace is gone, the plugin cannot still
+        // be installed through it, so treat it as a silent no-op.
+        let entries = list_marketplaces()?;
+        let alias = match find_alias(&entries, marketplace) {
+            Some(alias) => alias.to_string(),
+            None => return Ok(()),
+        };
+        let plugin_ref = format!("{plugin}@{alias}");
+
+        // Idempotency: if claude doesn't list it, nothing to do.
+        let plugins = list_plugins()?;
+        if !plugins.iter().any(|p| p.id == plugin_ref) {
+            return Ok(());
+        }
+
         let status = Command::new("claude")
             .args(["plugin", "uninstall", &plugin_ref])
             .status()
@@ -256,16 +350,46 @@ mod tests {
     }
 
     #[test]
-    fn is_already_exists_matches_known_phrases() {
-        assert!(is_already_exists(b"", b"Plugin already installed"));
-        assert!(is_already_exists(b"already exists\n", b""));
-        assert!(is_already_exists(b"", b"Marketplace already added"));
-        // Case-insensitive.
-        assert!(is_already_exists(b"", b"ALREADY INSTALLED"));
-        // Negative cases.
-        assert!(!is_already_exists(b"", b"network unreachable"));
-        assert!(!is_already_exists(b"plugin not found", b""));
-        assert!(!is_already_exists(b"", b""));
+    fn find_alias_matches_by_repo_not_by_name() {
+        let json = br#"[
+            {"name":"fantoine-plugins","source":"github","repo":"fantoine/claude-plugins"},
+            {"name":"caveman","source":"github","repo":"JuliusBrussee/caveman"}
+        ]"#;
+        let entries = parse_marketplace_list(json).unwrap();
+        assert_eq!(
+            find_alias(&entries, "fantoine/claude-plugins"),
+            Some("fantoine-plugins")
+        );
+        assert_eq!(
+            find_alias(&entries, "JuliusBrussee/caveman"),
+            Some("caveman")
+        );
+        assert_eq!(find_alias(&entries, "unknown/repo"), None);
+        // Confirms we don't accidentally match on `name`.
+        assert_eq!(find_alias(&entries, "fantoine-plugins"), None);
+    }
+
+    #[test]
+    fn parse_marketplace_list_tolerates_extra_fields() {
+        let json = br#"[{"name":"x","source":"github","repo":"a/b","installLocation":"/tmp/x"}]"#;
+        let entries = parse_marketplace_list(json).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "x");
+        assert_eq!(entries[0].repo.as_deref(), Some("a/b"));
+    }
+
+    #[test]
+    fn parse_plugin_list_extracts_id() {
+        let json = br#"[
+            {"id":"later@fantoine-plugins","version":"1.0","scope":"user","enabled":true},
+            {"id":"figma@claude-plugins-official","scope":"user"}
+        ]"#;
+        let entries = parse_plugin_list(json).unwrap();
+        let ids: Vec<_> = entries.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec!["later@fantoine-plugins", "figma@claude-plugins-official"]
+        );
     }
 
     #[test]

@@ -67,7 +67,7 @@ pub async fn run(
                 "dependency '{name}' already in [dependencies] — overwriting"
             ));
         }
-        manifest.dependencies.insert(name.clone(), dep);
+        manifest.dependencies.insert(name.clone(), dep.clone());
     } else {
         for cli in &cli_filter {
             let entry = manifest.cli_dependencies.entry(cli.clone()).or_default();
@@ -81,7 +81,15 @@ pub async fn run(
     }
 
     manifest.to_file(&agentfile_path)?;
-    crate::core::installer::Installer::install_manifest(&manifest, &lock_path, &scope).await?;
+
+    // Only install the freshly-added dep. Running the whole manifest here
+    // would surprise users by installing every sibling dep declared in the
+    // Agentfile — that's the job of `agix install`. The scoped manifest
+    // preserves `agix.cli` so the resolver still targets the correct drivers;
+    // the lock is merged via `upsert`, so existing lock entries are untouched.
+    let scoped_manifest = manifest.single_dep_scoped(&name, dep, &cli_filter);
+    crate::core::installer::Installer::install_manifest(&scoped_manifest, &lock_path, &scope)
+        .await?;
     crate::output::success(&format!("Added {name}"));
     Ok(())
 }

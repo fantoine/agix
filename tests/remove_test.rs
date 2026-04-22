@@ -1,5 +1,4 @@
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use tempfile::{tempdir, TempDir};
 
@@ -17,13 +16,8 @@ fn setup_workspace() -> (TempDir, TempDir, TempDir) {
 
 fn write_claude_shim(dir: &Path) -> std::path::PathBuf {
     let log = dir.join("claude-invocations.log");
-    let shim = dir.join("claude");
-    fs::write(
-        &shim,
-        format!("#!/bin/sh\necho \"$@\" >> {}\nexit 0\n", log.display()),
-    )
-    .unwrap();
-    fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
+    let state = dir.join("state");
+    helpers::install_claude_shim(dir, &log, &state);
     log
 }
 
@@ -335,9 +329,9 @@ async fn step8_remove_marketplace_plugin_invokes_claude_uninstall() {
         .assert()
         .success();
 
-    // Install logged marketplace add + install.
+    // Install logged marketplace add + alias-keyed install.
     let log = fs::read_to_string(&log_path).unwrap();
-    assert!(log.contains("plugin install roundtable@fantoine/claude-plugins"));
+    assert!(log.contains("plugin install roundtable@claude-plugins"));
 
     helpers::cmd_non_interactive(home.path())
         .current_dir(cwd.path())
@@ -348,8 +342,8 @@ async fn step8_remove_marketplace_plugin_invokes_claude_uninstall() {
 
     let log = fs::read_to_string(&log_path).unwrap();
     assert!(
-        log.contains("plugin uninstall roundtable@fantoine/claude-plugins"),
-        "expected claude plugin uninstall invocation; got: {log}"
+        log.contains("plugin uninstall roundtable@claude-plugins"),
+        "expected alias-keyed claude plugin uninstall; got: {log}"
     );
 
     // Lock entry gone.

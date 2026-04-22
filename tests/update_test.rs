@@ -1,6 +1,5 @@
 use agix::core::lock::LockFile;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use tempfile::{tempdir, TempDir};
 
@@ -71,16 +70,12 @@ fn build_local_pkg(marker: &str) -> TempDir {
     pkg
 }
 
-/// Claude shim that logs every invocation and exits 0.
+/// Claude shim that logs every invocation and mimics the marketplace/plugin
+/// JSON list commands via a state dir colocated with the shim.
 fn write_claude_shim(dir: &Path) -> PathBuf {
     let log = dir.join("claude-invocations.log");
-    let shim = dir.join("claude");
-    fs::write(
-        &shim,
-        format!("#!/bin/sh\necho \"$@\" >> {}\nexit 0\n", log.display()),
-    )
-    .unwrap();
-    fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
+    let state = dir.join("state");
+    helpers::install_claude_shim(dir, &log, &state);
     log
 }
 
@@ -408,14 +403,14 @@ mkt = { source = "marketplace:fantoine/claude-plugins@roundtable" }
         .success();
 
     let claude_log = fs::read_to_string(&log).unwrap();
-    // uninstall then install: both must be visible.
+    // uninstall then install (both keyed by marketplace alias) must be visible.
     assert!(
-        claude_log.contains("plugin uninstall roundtable@fantoine/claude-plugins"),
-        "expected update to call `plugin uninstall`; got: {claude_log}"
+        claude_log.contains("plugin uninstall roundtable@claude-plugins"),
+        "expected update to call alias-keyed `plugin uninstall`; got: {claude_log}"
     );
     assert!(
-        claude_log.contains("plugin install roundtable@fantoine/claude-plugins"),
-        "expected update to re-invoke `plugin install`; got: {claude_log}"
+        claude_log.contains("plugin install roundtable@claude-plugins"),
+        "expected update to re-invoke alias-keyed `plugin install`; got: {claude_log}"
     );
 }
 
