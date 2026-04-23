@@ -102,7 +102,10 @@ fn dep_in_manifest(manifest: &ProjectManifest, name: &str) -> bool {
     if manifest.dependencies.contains_key(name) {
         return true;
     }
-    manifest.cli_dependencies.values().any(|m| m.contains_key(name))
+    manifest
+        .cli_dependencies
+        .values()
+        .any(|m| m.contains_key(name))
 }
 
 /// Find the manifest-declared `version` (floating ref / tag / branch) for a

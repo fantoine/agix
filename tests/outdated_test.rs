@@ -527,10 +527,8 @@ async fn orphaned_lock_entry_is_skipped_and_not_in_report() {
     deps.insert(
         "later".to_string(),
         Dependency {
-            source: agix::sources::SourceBox::parse(
-                "marketplace:fantoine/claude-plugins@later",
-            )
-            .unwrap(),
+            source: agix::sources::SourceBox::parse("marketplace:fantoine/claude-plugins@later")
+                .unwrap(),
             version: None,
             exclude: None,
         },
