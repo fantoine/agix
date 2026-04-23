@@ -1,5 +1,6 @@
 use predicates::prelude::*;
 use std::fs;
+use std::path::Path;
 use tempfile::tempdir;
 
 mod helpers;
@@ -293,6 +294,137 @@ async fn step3_outdated_up_to_date_when_remote_sha_matches() {
             assert_eq!(sha, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         }
         other => panic!("expected UpToDate, got {other:?}"),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Git (non-github) deps: `GitSource::resolve_ref` via libgit2 ls-remote.
+// Tests use a local bare repo (file:// URL) — no network, fully hermetic.
+// ---------------------------------------------------------------------------
+
+fn make_local_repo(root: &Path) -> (String, String) {
+    let repo = git2::Repository::init(root).unwrap();
+    let sig = git2::Signature::now("t", "t@t.t").unwrap();
+    fs::write(root.join("skill.md"), "# s").unwrap();
+    let mut idx = repo.index().unwrap();
+    idx.add_path(std::path::Path::new("skill.md")).unwrap();
+    idx.write().unwrap();
+    let oid = idx.write_tree().unwrap();
+    let tree = repo.find_tree(oid).unwrap();
+    let commit = repo
+        .commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
+        .unwrap();
+    let url = format!("file://{}", root.display());
+    (url, commit.to_string())
+}
+
+#[tokio::test]
+async fn git_dep_is_up_to_date_when_sha_matches() {
+    use agix::commands::outdated::{check_outdated, OutdatedStatus};
+    use agix::core::lock::{LockFile, LockedPackage};
+    use agix::manifest::agentfile::{AgixSection, ProjectManifest};
+    use std::collections::HashMap;
+
+    let repo_dir = tempdir().unwrap();
+    let (url, sha) = make_local_repo(repo_dir.path());
+
+    let manifest = ProjectManifest {
+        agix: AgixSection {
+            cli: vec![],
+            name: None,
+            version: None,
+            description: None,
+        },
+        dependencies: HashMap::new(),
+        cli_dependencies: HashMap::new(),
+    };
+
+    let lock = LockFile {
+        packages: vec![LockedPackage {
+            name: "my-git-dep".to_string(),
+            source: agix::sources::SourceBox::parse(&format!("git:{url}")).unwrap(),
+            sha: Some(sha.clone()),
+            content_hash: None,
+            version: None,
+            cli: vec![],
+            scope: "local".to_string(),
+            files: vec![],
+        }],
+    };
+
+    let statuses = check_outdated(&manifest, &lock, None).await.unwrap();
+    assert_eq!(statuses.len(), 1);
+    match &statuses[0] {
+        OutdatedStatus::UpToDate { name, sha: locked } => {
+            assert_eq!(name, "my-git-dep");
+            assert_eq!(locked, &sha);
+        }
+        other => panic!("expected UpToDate, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn git_dep_is_outdated_when_new_commit_added() {
+    use agix::commands::outdated::{check_outdated, OutdatedStatus};
+    use agix::core::lock::{LockFile, LockedPackage};
+    use agix::manifest::agentfile::{AgixSection, ProjectManifest};
+    use std::collections::HashMap;
+
+    let repo_dir = tempdir().unwrap();
+    let (url, old_sha) = make_local_repo(repo_dir.path());
+
+    // Add a second commit so HEAD is ahead of what's in the lock.
+    let repo = git2::Repository::open(repo_dir.path()).unwrap();
+    let sig = git2::Signature::now("t", "t@t.t").unwrap();
+    fs::write(repo_dir.path().join("skill2.md"), "# s2").unwrap();
+    let mut idx = repo.index().unwrap();
+    idx.add_path(std::path::Path::new("skill2.md")).unwrap();
+    idx.write().unwrap();
+    let oid = idx.write_tree().unwrap();
+    let tree = repo.find_tree(oid).unwrap();
+    let parent = repo.head().unwrap().peel_to_commit().unwrap();
+    let new_sha = repo
+        .commit(Some("HEAD"), &sig, &sig, "second", &tree, &[&parent])
+        .unwrap()
+        .to_string();
+
+    let manifest = ProjectManifest {
+        agix: AgixSection {
+            cli: vec![],
+            name: None,
+            version: None,
+            description: None,
+        },
+        dependencies: HashMap::new(),
+        cli_dependencies: HashMap::new(),
+    };
+
+    let lock = LockFile {
+        packages: vec![LockedPackage {
+            name: "my-git-dep".to_string(),
+            source: agix::sources::SourceBox::parse(&format!("git:{url}")).unwrap(),
+            sha: Some(old_sha.clone()),
+            content_hash: None,
+            version: None,
+            cli: vec![],
+            scope: "local".to_string(),
+            files: vec![],
+        }],
+    };
+
+    let statuses = check_outdated(&manifest, &lock, None).await.unwrap();
+    assert_eq!(statuses.len(), 1);
+    match &statuses[0] {
+        OutdatedStatus::Outdated {
+            name,
+            current_sha,
+            available_sha,
+        } => {
+            assert_eq!(name, "my-git-dep");
+            assert_eq!(current_sha, &old_sha);
+            assert_eq!(available_sha, &new_sha);
+        }
+        other => panic!("expected Outdated, got {other:?}"),
     }
 }
 

@@ -95,13 +95,110 @@ fn step5_add_local_unknown_cli_errors_with_known_drivers_listed() {
     assert!(!content.contains("not-in-agix-cli"));
 }
 
-// ---------- Step 6 / 7: GitHub source — currently NOT runnable hermetically ----------
+// ---------- Step 6 / 7: GitHub source — hermetic via AGIX_GITHUB_BASE_URL ----------
 //
-// The `GitHubSource` wires its API base through a `#[cfg(test)]` constructor
-// only; the CLI path does not honor an `AGIX_GITHUB_BASE_URL`-style env var.
-// Wiring that override is out of scope for Task 10 (a Phase-B source-review
-// task would own it). Unit tests in `src/sources/github.rs` already exercise
-// `resolve_ref` via mockito, so we don't duplicate them here.
+// `GitHubSource::new` (production path) honours the `AGIX_GITHUB_BASE_URL`
+// env var (see `src/sources/github.rs::resolve_bases`). Integration tests set
+// this env var to a mockito server URL so the CLI subprocess redirects both
+// the ref-resolution API call and the archive download to a local mock.
+
+fn build_github_style_zip() -> Vec<u8> {
+    use std::io::Write as _;
+    let mut buf = Vec::new();
+    {
+        let cursor = std::io::Cursor::new(&mut buf);
+        let mut writer = zip::ZipWriter::new(cursor);
+        let options: zip::write::FileOptions<()> =
+            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        writer
+            .start_file("claude-later-abc1234/skill.md", options)
+            .unwrap();
+        writer.write_all(b"# later skill").unwrap();
+        writer.finish().unwrap();
+    }
+    buf
+}
+
+#[tokio::test]
+async fn step6_add_github_without_version_fetches_head_sha() {
+    let mut server = mockito::Server::new_async().await;
+    let sha = "abc123def456abc123def456abc123def456abc1";
+
+    let _m_head = server
+        .mock("GET", "/repos/fantoine/claude-later/commits/HEAD")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(format!(r#"{{"sha":"{sha}"}}"#))
+        .create_async()
+        .await;
+    let _m_archive = server
+        .mock(
+            "GET",
+            format!("/fantoine/claude-later/archive/{sha}.zip").as_str(),
+        )
+        .with_status(200)
+        .with_body(build_github_style_zip())
+        .create_async()
+        .await;
+
+    let cwd = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    fs::write(cwd.path().join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
+
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
+        .env("AGIX_GITHUB_BASE_URL", server.url())
+        .args(["add", "github", "fantoine/claude-later"])
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(cwd.path().join("Agentfile")).unwrap();
+    assert!(content.contains("claude-later"));
+
+    let lock = fs::read_to_string(cwd.path().join("Agentfile.lock")).unwrap();
+    assert!(lock.contains(sha));
+}
+
+#[tokio::test]
+async fn step7_add_github_with_at_ref_fetches_tag_sha() {
+    // The ref is embedded in the source value as `org/repo@tag`. This is the
+    // correct way to pin a specific ref — `--version` stores in Dependency.version
+    // (for display/lock) but does NOT flow into the source's ref_str.
+    let mut server = mockito::Server::new_async().await;
+    let sha = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+
+    let _m_tag = server
+        .mock("GET", "/repos/fantoine/claude-later/git/ref/tags/v1.0.0")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(format!(r#"{{"object":{{"sha":"{sha}"}}}}"#))
+        .create_async()
+        .await;
+    let _m_archive = server
+        .mock(
+            "GET",
+            format!("/fantoine/claude-later/archive/{sha}.zip").as_str(),
+        )
+        .with_status(200)
+        .with_body(build_github_style_zip())
+        .create_async()
+        .await;
+
+    let cwd = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    fs::write(cwd.path().join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
+
+    helpers::cmd_non_interactive(home.path())
+        .current_dir(cwd.path())
+        .env("AGIX_GITHUB_BASE_URL", server.url())
+        // ref embedded in value: `org/repo@tag`
+        .args(["add", "github", "fantoine/claude-later@v1.0.0"])
+        .assert()
+        .success();
+
+    let lock = fs::read_to_string(cwd.path().join("Agentfile.lock")).unwrap();
+    assert!(lock.contains(sha));
+}
 
 // ---------- Step 8: add git from a local bare repo ----------
 
