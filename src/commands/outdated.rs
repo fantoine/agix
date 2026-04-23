@@ -83,12 +83,26 @@ pub async fn check_outdated(
     lock: &LockFile,
     github_api_base: Option<&str>,
 ) -> anyhow::Result<Vec<OutdatedStatus>> {
-    let mut out = Vec::with_capacity(lock.packages.len());
+    let mut out = Vec::new();
     for pkg in &lock.packages {
+        if !dep_in_manifest(manifest, &pkg.name) {
+            crate::output::warn(&format!(
+                "{} is in the lock file but not in the Agentfile — run `agix remove {}` to clean up",
+                pkg.name, pkg.name
+            ));
+            continue;
+        }
         let requested_ref = dep_version_for(manifest, &pkg.name);
         out.push(resolve_one(pkg, requested_ref.as_deref(), github_api_base).await);
     }
     Ok(out)
+}
+
+fn dep_in_manifest(manifest: &ProjectManifest, name: &str) -> bool {
+    if manifest.dependencies.contains_key(name) {
+        return true;
+    }
+    manifest.cli_dependencies.values().any(|m| m.contains_key(name))
 }
 
 /// Find the manifest-declared `version` (floating ref / tag / branch) for a

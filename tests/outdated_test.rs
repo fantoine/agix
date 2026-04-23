@@ -322,12 +322,21 @@ fn make_local_repo(root: &Path) -> (String, String) {
 async fn git_dep_is_up_to_date_when_sha_matches() {
     use agix::commands::outdated::{check_outdated, OutdatedStatus};
     use agix::core::lock::{LockFile, LockedPackage};
-    use agix::manifest::agentfile::{AgixSection, ProjectManifest};
+    use agix::manifest::agentfile::{AgixSection, Dependency, ProjectManifest};
     use std::collections::HashMap;
 
     let repo_dir = tempdir().unwrap();
     let (url, sha) = make_local_repo(repo_dir.path());
 
+    let mut deps = HashMap::new();
+    deps.insert(
+        "my-git-dep".to_string(),
+        Dependency {
+            source: agix::sources::SourceBox::parse(&format!("git:{url}")).unwrap(),
+            version: None,
+            exclude: None,
+        },
+    );
     let manifest = ProjectManifest {
         agix: AgixSection {
             cli: vec![],
@@ -335,7 +344,7 @@ async fn git_dep_is_up_to_date_when_sha_matches() {
             version: None,
             description: None,
         },
-        dependencies: HashMap::new(),
+        dependencies: deps,
         cli_dependencies: HashMap::new(),
     };
 
@@ -367,7 +376,7 @@ async fn git_dep_is_up_to_date_when_sha_matches() {
 async fn git_dep_is_outdated_when_new_commit_added() {
     use agix::commands::outdated::{check_outdated, OutdatedStatus};
     use agix::core::lock::{LockFile, LockedPackage};
-    use agix::manifest::agentfile::{AgixSection, ProjectManifest};
+    use agix::manifest::agentfile::{AgixSection, Dependency, ProjectManifest};
     use std::collections::HashMap;
 
     let repo_dir = tempdir().unwrap();
@@ -388,6 +397,15 @@ async fn git_dep_is_outdated_when_new_commit_added() {
         .unwrap()
         .to_string();
 
+    let mut deps = HashMap::new();
+    deps.insert(
+        "my-git-dep".to_string(),
+        Dependency {
+            source: agix::sources::SourceBox::parse(&format!("git:{url}")).unwrap(),
+            version: None,
+            exclude: None,
+        },
+    );
     let manifest = ProjectManifest {
         agix: AgixSection {
             cli: vec![],
@@ -395,7 +413,7 @@ async fn git_dep_is_outdated_when_new_commit_added() {
             version: None,
             description: None,
         },
-        dependencies: HashMap::new(),
+        dependencies: deps,
         cli_dependencies: HashMap::new(),
     };
 
@@ -437,9 +455,21 @@ async fn git_dep_is_outdated_when_new_commit_added() {
 async fn marketplace_deps_are_labeled_not_remotely_checked() {
     use agix::commands::outdated::{check_outdated, OutdatedStatus};
     use agix::core::lock::{LockFile, LockedPackage};
-    use agix::manifest::agentfile::{AgixSection, ProjectManifest};
+    use agix::manifest::agentfile::{AgixSection, Dependency, ProjectManifest};
     use std::collections::HashMap;
 
+    let mut deps = HashMap::new();
+    deps.insert(
+        "roundtable".to_string(),
+        Dependency {
+            source: agix::sources::SourceBox::parse(
+                "marketplace:fantoine/claude-plugins@roundtable",
+            )
+            .unwrap(),
+            version: None,
+            exclude: None,
+        },
+    );
     let manifest = ProjectManifest {
         agix: AgixSection {
             cli: vec!["claude".to_string()],
@@ -447,7 +477,7 @@ async fn marketplace_deps_are_labeled_not_remotely_checked() {
             version: None,
             description: None,
         },
-        dependencies: HashMap::new(),
+        dependencies: deps,
         cli_dependencies: HashMap::new(),
     };
 
@@ -477,5 +507,83 @@ async fn marketplace_deps_are_labeled_not_remotely_checked() {
             assert_eq!(driver, "claude");
         }
         other => panic!("expected Marketplace, got {other:?}"),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Orphaned lock entry: package in lock but absent from manifest is silently
+// skipped (with a warning to stderr). The report only covers declared deps.
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn orphaned_lock_entry_is_skipped_and_not_in_report() {
+    use agix::commands::outdated::{check_outdated, OutdatedStatus};
+    use agix::core::lock::{LockFile, LockedPackage};
+    use agix::manifest::agentfile::{AgixSection, Dependency, ProjectManifest};
+    use std::collections::HashMap;
+
+    // Manifest declares only `later`.
+    let mut deps = HashMap::new();
+    deps.insert(
+        "later".to_string(),
+        Dependency {
+            source: agix::sources::SourceBox::parse(
+                "marketplace:fantoine/claude-plugins@later",
+            )
+            .unwrap(),
+            version: None,
+            exclude: None,
+        },
+    );
+    let manifest = ProjectManifest {
+        agix: AgixSection {
+            cli: vec!["claude".to_string()],
+            name: None,
+            version: None,
+            description: None,
+        },
+        dependencies: deps,
+        cli_dependencies: HashMap::new(),
+    };
+
+    // Lock has `later` (declared) + `caveman` (orphan — removed from manifest
+    // but lock not cleaned up).
+    let lock = LockFile {
+        packages: vec![
+            LockedPackage {
+                name: "later".to_string(),
+                source: agix::sources::SourceBox::parse(
+                    "marketplace:fantoine/claude-plugins@later",
+                )
+                .unwrap(),
+                sha: None,
+                content_hash: None,
+                version: None,
+                cli: vec!["claude".to_string()],
+                scope: "global".to_string(),
+                files: vec![],
+            },
+            LockedPackage {
+                name: "caveman".to_string(),
+                source: agix::sources::SourceBox::parse(
+                    "marketplace:JuliusBrussee/caveman@caveman",
+                )
+                .unwrap(),
+                sha: None,
+                content_hash: None,
+                version: None,
+                cli: vec!["claude".to_string()],
+                scope: "global".to_string(),
+                files: vec![],
+            },
+        ],
+    };
+
+    let statuses = check_outdated(&manifest, &lock, None).await.unwrap();
+    // Only `later` (declared) — `caveman` (orphan) excluded from report.
+    assert_eq!(statuses.len(), 1);
+    match &statuses[0] {
+        OutdatedStatus::Marketplace { name, .. } => assert_eq!(name, "later"),
+        other => panic!("expected Marketplace for later, got {other:?}"),
     }
 }
