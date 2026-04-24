@@ -16,20 +16,52 @@ use crate::sources::SourceBox;
 ///   - A `local-sources/<name>/` tree per local dependency containing the
 ///     vendored files.
 ///
+/// With `--all`, both local and global scopes are exported into the same zip
+/// under `local/` and `global/` prefixes respectively.
+///
 /// Unzipping the archive and running `agix install` in the extracted directory
-/// must succeed — nothing should point to the source machine's filesystem.
+/// (or inside `local/` / `global/` for `--all`) must succeed — nothing should
+/// point to the source machine's filesystem.
 pub async fn run(global: bool, all: bool, output: Option<String>) -> Result<()> {
+    let cwd = std::env::current_dir()?;
+    let output_path = output.unwrap_or_else(|| "agix-export.zip".to_string());
+    let options: zip::write::FileOptions<()> =
+        zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+
     if all {
-        bail!("--all is not yet implemented — export one scope at a time");
+        let file = std::fs::File::create(&output_path)?;
+        let mut zip = zip::ZipWriter::new(file);
+
+        // Local scope — walk-up only, no auto-create.
+        match super::agentfile_path_walk_up_only(&cwd) {
+            Some(af) => {
+                let lock = af.parent().unwrap_or(&cwd).join(AGENTFILE_LOCK);
+                export_scope(&af, &lock, "local", &mut zip, options)?;
+            }
+            None => crate::output::warn("no local Agentfile found — skipping local scope"),
+        }
+
+        // Global scope — read only, no auto-create.
+        let (global_af, global_lock) = super::global_paths()?;
+        if global_af.exists() {
+            export_scope(&global_af, &global_lock, "global", &mut zip, options)?;
+        } else {
+            crate::output::warn("no global Agentfile found — skipping global scope");
+        }
+
+        zip.finish()?;
+        crate::output::success(&format!("Exported to {output_path}"));
+        return Ok(());
     }
 
-    let cwd = std::env::current_dir()?;
     let (agentfile_path, lock_path, resolved) = super::agentfile_paths(global, &cwd, false)?;
     if let super::ResolvedScope::Project(ref root) = resolved {
         std::env::set_current_dir(root)?;
     }
-    let is_global = matches!(resolved, super::ResolvedScope::Global);
-    crate::output::scope_header(&agentfile_path, is_global);
+    crate::output::scope_header(
+        &agentfile_path,
+        matches!(resolved, super::ResolvedScope::Global),
+    );
 
     if !agentfile_path.exists() {
         bail!(
@@ -38,16 +70,35 @@ pub async fn run(global: bool, all: bool, output: Option<String>) -> Result<()> 
         );
     }
 
-    let output_path = output.unwrap_or_else(|| "agix-export.zip".to_string());
+    let file = std::fs::File::create(&output_path)?;
+    let mut zip = zip::ZipWriter::new(file);
+    export_scope(&agentfile_path, &lock_path, "", &mut zip, options)?;
+    zip.finish()?;
+    crate::output::success(&format!("Exported to {output_path}"));
+    Ok(())
+}
 
-    // Parse the manifest, then produce a rewritten clone whose local sources
-    // are relocated to `local:./local-sources/<name>`.
-    let manifest = ProjectManifest::from_file(&agentfile_path)?;
+/// Write one scope (local or global) into `zip` under `prefix/`.
+///
+/// `prefix` is `""` for a single-scope export (files at zip root), or
+/// `"local"` / `"global"` for a combined `--all` export.
+fn export_scope<W: std::io::Write + std::io::Seek>(
+    agentfile_path: &Path,
+    lock_path: &Path,
+    prefix: &str,
+    zip: &mut zip::ZipWriter<W>,
+    options: zip::write::FileOptions<()>,
+) -> Result<()> {
+    let zp = |name: &str| -> String {
+        if prefix.is_empty() {
+            name.to_string()
+        } else {
+            format!("{prefix}/{name}")
+        }
+    };
+
+    let manifest = ProjectManifest::from_file(agentfile_path)?;
     let mut rewritten = manifest.clone();
-
-    // Map of package-name -> original absolute source path, so we can locate
-    // the files on disk and vendor them into the zip. We don't rely on the
-    // lock alone because top-level deps may not all be installed yet.
     let mut local_sources: HashMap<String, PathBuf> = HashMap::new();
 
     rewrite_local_deps(&mut rewritten.dependencies, &mut local_sources);
@@ -55,38 +106,29 @@ pub async fn run(global: bool, all: bool, output: Option<String>) -> Result<()> 
         rewrite_local_deps(deps, &mut local_sources);
     }
 
-    // Open the zip.
-    let file = std::fs::File::create(&output_path)?;
-    let mut zip = zip::ZipWriter::new(file);
-    let options: zip::write::FileOptions<()> =
-        zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-
-    // Rewritten Agentfile.
     let rewritten_agentfile = rewritten.to_toml_string()?;
-    zip.start_file(AGENTFILE, options)?;
+    zip.start_file(zp(AGENTFILE), options)?;
     zip.write_all(rewritten_agentfile.as_bytes())?;
 
-    // Rewritten lock (if one exists).
     if lock_path.exists() {
-        let lock_text = std::fs::read_to_string(&lock_path)?;
+        let lock_text = std::fs::read_to_string(lock_path)?;
         let rewritten_lock = rewrite_local_sources_in_lock(&lock_text, &local_sources)?;
-        zip.start_file(AGENTFILE_LOCK, options)?;
+        zip.start_file(zp(AGENTFILE_LOCK), options)?;
         zip.write_all(rewritten_lock.as_bytes())?;
     }
 
-    // Vendor each local source under local-sources/<name>/.
+    let ls_prefix = zp("local-sources");
     for (name, abs_path) in &local_sources {
         let source_dir = if abs_path.is_absolute() {
             abs_path.clone()
         } else {
-            // Best effort: resolve relative to the project dir.
             agentfile_path
                 .parent()
                 .map(|p| p.join(abs_path))
                 .unwrap_or_else(|| abs_path.clone())
         };
         if source_dir.exists() {
-            copy_dir_into_zip(&mut zip, &source_dir, name, options)?;
+            copy_dir_into_zip(zip, &source_dir, name, &ls_prefix, options)?;
         } else {
             crate::output::warn(&format!(
                 "local source for '{}' not found at {} — skipping",
@@ -96,8 +138,6 @@ pub async fn run(global: bool, all: bool, output: Option<String>) -> Result<()> 
         }
     }
 
-    zip.finish()?;
-    crate::output::success(&format!("Exported to {output_path}"));
     Ok(())
 }
 
@@ -111,8 +151,6 @@ fn rewrite_local_deps(
     for (name, dep) in deps.iter_mut() {
         if let Some(path) = dep.source.local_path() {
             local_sources.insert(name.clone(), path.to_path_buf());
-            // Unwrap: `local:./…` is a syntactically valid local source, so
-            // parsing cannot fail here.
             dep.source = SourceBox::parse(&format!("local:./local-sources/{name}"))
                 .expect("hard-coded local: source is always parseable");
         }
@@ -148,8 +186,6 @@ fn rewrite_local_sources_in_lock(
             }
             let new_source = format!("local:./local-sources/{name}");
             pkg_table.insert("source".to_string(), toml::Value::String(new_source));
-            // Clear files: they recorded absolute destinations on the source
-            // machine. The target `install` will repopulate them.
             if let Some(files) = pkg_table.get_mut("files") {
                 *files = toml::Value::Array(vec![]);
             }
@@ -159,13 +195,13 @@ fn rewrite_local_sources_in_lock(
     Ok(toml::to_string_pretty(&value)?)
 }
 
-/// Walk `src_dir` and add every file under `local-sources/<name>/...` inside the
-/// zip archive. Directories don't need explicit entries — extraction tools
-/// recreate them from the file paths.
+/// Walk `src_dir` and add every file under `<ls_prefix>/<name>/...` inside the
+/// zip archive.
 fn copy_dir_into_zip<W: std::io::Write + std::io::Seek>(
     zip: &mut zip::ZipWriter<W>,
     src_dir: &Path,
     name: &str,
+    ls_prefix: &str,
     options: zip::write::FileOptions<()>,
 ) -> Result<()> {
     for entry in walkdir::WalkDir::new(src_dir) {
@@ -174,13 +210,12 @@ fn copy_dir_into_zip<W: std::io::Write + std::io::Seek>(
             continue;
         }
         let rel = entry.path().strip_prefix(src_dir).unwrap_or(entry.path());
-        // Force forward slashes inside the archive for portability.
         let rel_str = rel
             .components()
             .filter_map(|c| c.as_os_str().to_str())
             .collect::<Vec<_>>()
             .join("/");
-        let zip_name = format!("local-sources/{name}/{rel_str}");
+        let zip_name = format!("{ls_prefix}/{name}/{rel_str}");
         zip.start_file(&zip_name, options)?;
         let content = std::fs::read(entry.path())?;
         zip.write_all(&content)?;

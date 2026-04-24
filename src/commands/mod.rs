@@ -64,7 +64,7 @@ pub fn agentfile_path_walk_up_only(cwd: &Path) -> Option<PathBuf> {
 }
 
 /// Return the `~/.agix/` paths without creating the directory.
-fn global_paths() -> anyhow::Result<(PathBuf, PathBuf)> {
+pub fn global_paths() -> anyhow::Result<(PathBuf, PathBuf)> {
     let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("no home directory"))?;
     let dir = home.join(AGIX_DIR);
     Ok((dir.join(AGENTFILE), dir.join(AGENTFILE_LOCK)))

@@ -19,6 +19,7 @@ script itself.
 - [x] `agix list` — shows the added dep
 - [x] `agix outdated` — labels `local` deps as not remotely checkable
 - [x] `agix export --output <zip>` — produces the archive
+- [x] `agix export --all --output <zip>` — both local + global scopes under `local/` and `global/` prefixes
 - [x] `agix remove <name>` — removes from manifest and lock
 
 ## Pending

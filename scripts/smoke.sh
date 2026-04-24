@@ -164,6 +164,18 @@ step "-g flag: list global scope shows dep"
 OUT="$(agix list -g)"
 assert_contains "$NAME" "$OUT" "list -g shows global dep"
 
+step "agix export --all (local + global)"
+OUT="$(agix export --all --output "$WORKSPACE/export-all.zip" 2>&1)"
+assert_contains "Exported" "$OUT" "export --all reports success"
+assert_file_exists "$WORKSPACE/export-all.zip" "export-all.zip produced"
+if command -v unzip >/dev/null 2>&1; then
+  ENTRIES="$(unzip -Z1 "$WORKSPACE/export-all.zip")"
+  assert_contains "local/Agentfile" "$ENTRIES" "export-all zip has local/Agentfile"
+  assert_contains "global/Agentfile" "$ENTRIES" "export-all zip has global/Agentfile"
+else
+  pass "export-all zip entry check skipped (unzip not available)"
+fi
+
 step "walk-up: list without -g finds local Agentfile (not global)"
 OUT="$(agix list)"
 assert_contains "No dependencies" "$OUT" "local Agentfile takes precedence over global"
