@@ -18,16 +18,16 @@ fn list_cmd(cwd: &std::path::Path, home: &std::path::Path) -> Command {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn step6_list_without_agentfile_exits_non_zero() {
+fn step6_list_without_local_agentfile_falls_back_to_global() {
+    // Walk-up finds no Agentfile → fallback to ~/.agix/ (auto-created, no deps).
     let cwd = tempdir().unwrap();
     let home = tempdir().unwrap();
 
     list_cmd(cwd.path(), home.path())
         .arg("list")
         .assert()
-        .failure()
-        .stderr(predicate::str::contains("no Agentfile"))
-        .stderr(predicate::str::contains("agix init"));
+        .success()
+        .stdout(predicate::str::contains("No dependencies declared"));
 }
 
 // ---------------------------------------------------------------------------
@@ -261,7 +261,7 @@ files = []
     .unwrap();
 
     list_cmd(cwd.path(), home.path())
-        .args(["list", "--scope", "global"])
+        .args(["list", "-g"])
         .assert()
         .success()
         .stdout(predicate::str::contains("global-dep"))
@@ -277,7 +277,7 @@ fn step7_list_global_scope_auto_inits_then_reports_empty() {
     let home = tempdir().unwrap();
 
     list_cmd(cwd.path(), home.path())
-        .args(["list", "--scope", "global"])
+        .args(["list", "-g"])
         .assert()
         .success()
         .stdout(predicate::str::contains("No dependencies declared"));

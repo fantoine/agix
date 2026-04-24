@@ -12,8 +12,7 @@ fn global_scope_auto_inits_agentfile_if_missing() {
         .arg("add")
         .arg("local")
         .arg(pkg_dir.path())
-        .arg("--scope")
-        .arg("global")
+        .arg("-g")
         .assert()
         .success();
 
@@ -100,14 +99,7 @@ fn init_global_scope_creates_home_agentfile() {
     let fake_home = tempdir().unwrap();
 
     helpers::cmd_non_interactive(fake_home.path())
-        .args([
-            "init",
-            "--scope",
-            "global",
-            "--no-interactive",
-            "--cli",
-            "claude",
-        ])
+        .args(["init", "-g", "--no-interactive", "--cli", "claude"])
         .assert()
         .success();
 
@@ -125,7 +117,7 @@ fn init_global_scope_fails_if_already_initialized() {
     std::fs::write(agix_dir.join("Agentfile"), "[agix]\ncli = []\n").unwrap();
 
     helpers::cmd_non_interactive(fake_home.path())
-        .args(["init", "--scope", "global", "--no-interactive"])
+        .args(["init", "-g", "--no-interactive"])
         .assert()
         .failure()
         .stderr(predicates::str::contains("Already initialized"));
@@ -150,14 +142,13 @@ fn init_rejects_unknown_cli() {
 }
 
 #[test]
-fn init_rejects_invalid_scope_at_clap_level() {
+fn init_rejects_unknown_flag_scope() {
     let dir = tempdir().unwrap();
     let home = tempdir().unwrap();
 
     helpers::cmd_non_interactive(home.path())
-        .args(["init", "--scope", "bogus", "--no-interactive"])
+        .args(["init", "--scope", "local", "--no-interactive"])
         .current_dir(&dir)
         .assert()
-        .failure()
-        .stderr(predicates::str::contains("invalid value 'bogus'"));
+        .failure();
 }

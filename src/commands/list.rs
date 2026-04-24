@@ -1,11 +1,15 @@
 use std::collections::BTreeMap;
 
 use crate::core::lock::{LockFile, LockedPackage};
-use crate::drivers::Scope;
 use crate::manifest::agentfile::{Dependency, ProjectManifest};
 
-pub async fn run(scope: Scope) -> anyhow::Result<()> {
-    let (agentfile_path, lock_path, _) = super::agentfile_paths(scope, false)?;
+pub async fn run(global: bool) -> anyhow::Result<()> {
+    let cwd = std::env::current_dir()?;
+    let (agentfile_path, lock_path, resolved) = super::agentfile_paths(global, &cwd, false)?;
+    crate::output::scope_header(
+        &agentfile_path,
+        matches!(resolved, super::ResolvedScope::Global),
+    );
 
     // Step 6: no Agentfile — exit non-zero with an actionable message.
     // `agentfile_paths` auto-creates the file for `--scope global` (first-time

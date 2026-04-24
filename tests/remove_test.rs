@@ -268,7 +268,7 @@ my-pkg = {{ source = "local:{}" }}
 
     helpers::cmd_non_interactive(home.path())
         .current_dir(cwd.path())
-        .args(["install", "--scope", "global"])
+        .args(["install", "-g"])
         .assert()
         .success();
 
@@ -281,7 +281,7 @@ my-pkg = {{ source = "local:{}" }}
 
     helpers::cmd_non_interactive(home.path())
         .current_dir(cwd.path())
-        .args(["remove", "my-pkg", "--scope", "global"])
+        .args(["remove", "my-pkg", "-g"])
         .assert()
         .success();
 

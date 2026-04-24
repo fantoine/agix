@@ -10,7 +10,8 @@ mod helpers;
 // ---------------------------------------------------------------------------
 
 #[test]
-fn update_fails_without_agentfile() {
+fn update_without_local_agentfile_falls_back_to_global() {
+    // Walk-up finds no Agentfile → fallback to ~/.agix/ (auto-created, no deps).
     let dir = tempdir().unwrap();
     let home = tempdir().unwrap();
 
@@ -18,7 +19,9 @@ fn update_fails_without_agentfile() {
         .args(["update"])
         .current_dir(&dir)
         .assert()
-        .failure();
+        .success();
+
+    assert!(home.path().join(".agix").join("Agentfile").exists());
 }
 
 #[test]

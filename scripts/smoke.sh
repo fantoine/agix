@@ -141,6 +141,41 @@ OUT="$(agix list)"
 assert_contains "No dependencies" "$OUT" "dep is gone from manifest"
 
 # ---------------------------------------------------------------------------
+# Scope walk-up resolution (v0.2.0)
+# ---------------------------------------------------------------------------
+SUBDIR="$WORKSPACE/sub"
+mkdir -p "$SUBDIR"
+
+step "walk-up: list from subdirectory finds parent Agentfile"
+OUT="$(cd "$SUBDIR" && agix list)"
+assert_contains "No dependencies" "$OUT" "walk-up resolves parent Agentfile"
+
+step "-g flag: init global scope"
+OUT="$(agix init -g)"
+assert_contains "Agentfile" "$OUT" "init -g creates global Agentfile"
+assert_file_exists "$FAKE_HOME/.agix/Agentfile" "global Agentfile exists"
+
+step "-g flag: add dep to global scope"
+printf '# global skill\n' > "$LOCAL_PKG/global-skill.md"
+OUT="$(agix add local "$LOCAL_PKG" -g 2>&1)"
+assert_contains "Added" "$OUT" "add -g succeeds"
+
+step "-g flag: list global scope shows dep"
+OUT="$(agix list -g)"
+assert_contains "$NAME" "$OUT" "list -g shows global dep"
+
+step "walk-up: list without -g finds local Agentfile (not global)"
+OUT="$(agix list)"
+assert_contains "No dependencies" "$OUT" "local Agentfile takes precedence over global"
+
+step "--scope flag removed in v0.2.0"
+if agix list --scope global 2>/dev/null; then
+  fail "--scope global should be rejected"
+else
+  pass "--scope global correctly rejected"
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 printf '\n==============================\n'

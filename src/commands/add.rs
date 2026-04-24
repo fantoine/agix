@@ -1,10 +1,9 @@
-use crate::drivers::Scope;
 use crate::manifest::agentfile::Dependency;
 
 pub async fn run(
     source_type: String,
     source_value: String,
-    scope: Scope,
+    global: bool,
     cli_filter: Vec<String>,
     version: Option<String>,
 ) -> anyhow::Result<()> {
@@ -39,7 +38,12 @@ pub async fn run(
 
     let source = format!("{}:{}", source_type, source_value);
 
-    let (agentfile_path, lock_path, scope) = super::agentfile_paths(scope, false)?;
+    let cwd = std::env::current_dir()?;
+    let (agentfile_path, lock_path, resolved) = super::agentfile_paths(global, &cwd, false)?;
+    if let super::ResolvedScope::Project(ref root) = resolved {
+        std::env::set_current_dir(root)?;
+    }
+    let scope = resolved.to_scope();
 
     // Actionable error if the Agentfile is missing (local scope). The auto-init
     // path in `agentfile_paths` covers global scope only.

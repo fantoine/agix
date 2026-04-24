@@ -77,29 +77,20 @@ fn step4_export_all_flag_is_not_yet_implemented_and_errors() {
 /// Step 5: exporting without an Agentfile must exit non-zero and point the
 /// user at `agix init` (consistent with `list`, `outdated`, `add`).
 #[test]
-fn step5_export_without_agentfile_exits_nonzero_and_suggests_init() {
+fn step5_export_without_agentfile_falls_back_to_global() {
+    // Walk-up finds no Agentfile → fallback to ~/.agix/ (auto-created).
     let dir = tempdir().unwrap();
     let home = tempdir().unwrap();
-    // Deliberately no Agentfile.
+    // Deliberately no Agentfile in dir.
 
-    let assert = helpers::cmd_non_interactive(home.path())
+    helpers::cmd_non_interactive(home.path())
         .current_dir(dir.path())
         .arg("export")
         .assert()
-        .failure();
+        .success()
+        .stdout(predicates::str::contains("Exported to agix-export.zip"));
 
-    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
-    assert!(
-        stderr.contains("no Agentfile"),
-        "expected 'no Agentfile' on stderr, got: {stderr}"
-    );
-    assert!(
-        stderr.contains("agix init"),
-        "expected 'agix init' hint on stderr, got: {stderr}"
-    );
-
-    // And no zip should have been created.
-    assert!(!dir.path().join("agix-export.zip").exists());
+    assert!(home.path().join(".agix").join("Agentfile").exists());
 }
 
 /// Step 7: github sources are remote refs — the exported Agentfile must keep

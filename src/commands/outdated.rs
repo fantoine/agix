@@ -1,5 +1,4 @@
 use crate::core::lock::LockFile;
-use crate::drivers::Scope;
 use crate::manifest::agentfile::ProjectManifest;
 
 /// Status of a single package as computed by [`check_outdated`].
@@ -37,12 +36,12 @@ pub enum OutdatedStatus {
     UnparseableSource { name: String, error: String },
 }
 
-pub async fn run(scope: Scope) -> anyhow::Result<()> {
-    let (agentfile_path, lock_path, _) = super::agentfile_paths(scope, false)?;
+pub async fn run(global: bool) -> anyhow::Result<()> {
+    let cwd = std::env::current_dir()?;
+    let (agentfile_path, lock_path, resolved) = super::agentfile_paths(global, &cwd, false)?;
+    let is_global = matches!(resolved, super::ResolvedScope::Global);
+    crate::output::scope_header(&agentfile_path, is_global);
 
-    // Step 5: no Agentfile — exit non-zero with an actionable message.
-    // `agentfile_paths` auto-creates the file for `--scope global`, so this
-    // check only fires for local scope.
     if !agentfile_path.exists() {
         anyhow::bail!(
             "no Agentfile at {} — run `agix init` first",

@@ -1,7 +1,9 @@
-use crate::drivers::Scope;
-
-pub async fn run(scope: Scope) -> anyhow::Result<()> {
-    let (agentfile_path, lock_path, scope) = super::agentfile_paths(scope, false)?;
+pub async fn run(global: bool) -> anyhow::Result<()> {
+    let cwd = std::env::current_dir()?;
+    let (agentfile_path, lock_path, resolved) = super::agentfile_paths(global, &cwd, false)?;
+    if let super::ResolvedScope::Project(ref root) = resolved {
+        std::env::set_current_dir(root)?;
+    }
     let manifest = crate::manifest::agentfile::ProjectManifest::from_file(&agentfile_path)?;
 
     for cli in &manifest.agix.cli {
@@ -15,6 +17,7 @@ pub async fn run(scope: Scope) -> anyhow::Result<()> {
         }
     }
 
+    let scope = resolved.to_scope();
     crate::core::installer::Installer::install_manifest(&manifest, &lock_path, &scope).await?;
     crate::output::success("Installed");
     Ok(())

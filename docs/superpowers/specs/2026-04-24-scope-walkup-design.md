@@ -198,12 +198,101 @@ Breaking UX change → `0.2.0`.
 
 ## Testing
 
-- Walk-up finds Agentfile in parent directory, not only cwd
-- Walk-up stops at `$HOME` boundary (no Agentfile above home)
-- Walk-up falls back to global when no Agentfile found
-- `-g` overrides walk-up even inside a project
-- Scope header printed to stderr on read commands
-- Scope header suppressed when stderr is not a TTY
-- `agix init` creates in cwd (no walk-up)
-- `agix init -g` creates in `~/.agix/`
-- Nested projects: inner Agentfile wins over outer
+All integration tests use `helpers::cmd_non_interactive(home)` with `tempdir` for cwd and home isolation.
+
+### New tests (`tests/scope_test.rs`)
+
+```rust
+// Walk-up: Agentfile in parent, cwd is a subdirectory
+fn walkup_finds_agentfile_in_parent() {
+    let project = tempdir();
+    let sub = project.path().join("src");
+    fs::create_dir(&sub);
+    fs::write(project.path().join("Agentfile"), minimal_agentfile());
+    fs::write(project.path().join("Agentfile.lock"), minimal_lock());
+
+    cmd(home).current_dir(&sub).args(["list"]).assert().success()
+        .stderr(contains(project.path().to_str().unwrap())); // scope header
+}
+
+// Walk-up: no Agentfile anywhere → fallback global (operates on ~/.agix/)
+fn walkup_falls_back_to_global_when_no_agentfile() {
+    let cwd = tempdir(); // empty, no Agentfile
+    let home = tempdir();
+    fs::write(home.path().join("Agentfile"), minimal_agentfile()); // global exists
+    fs::write(home.path().join("Agentfile.lock"), minimal_lock());
+
+    cmd(home.path()).current_dir(cwd.path()).args(["list"])
+        .assert().success()
+        .stderr(contains(".agix/Agentfile"));
+}
+
+// Walk-up stops at $HOME — no Agentfile found above home boundary
+fn walkup_stops_at_home_boundary() {
+    // home has no Agentfile, cwd is inside home, no project Agentfile exists
+    // → fallback global creates ~/.agix/Agentfile automatically
+    let home = tempdir();
+    let cwd = tempdir_inside(home.path()); // cwd is a subdir of home
+    cmd(home.path()).current_dir(cwd.path()).args(["list"])
+        .assert().success()
+        .stderr(contains(".agix/Agentfile"));
+}
+
+// -g overrides walk-up even inside a project
+fn global_flag_overrides_walkup() {
+    let project = tempdir();
+    let home = tempdir();
+    fs::write(project.path().join("Agentfile"), minimal_agentfile());
+    init_global(home.path()); // creates ~/.agix/Agentfile
+
+    cmd(home.path()).current_dir(project.path()).args(["list", "-g"])
+        .assert().success()
+        .stderr(contains(".agix/Agentfile")); // global used, not project
+}
+
+// Nested projects: inner Agentfile wins
+fn nested_project_inner_agentfile_wins() {
+    let outer = tempdir();
+    let inner = outer.path().join("inner");
+    fs::create_dir(&inner);
+    fs::write(outer.path().join("Agentfile"), agentfile_with_dep("outer-dep"));
+    fs::write(inner.join("Agentfile"), agentfile_with_dep("inner-dep"));
+
+    cmd(home).current_dir(&inner).args(["list"])
+        .assert().success()
+        .stdout(contains("inner-dep"))
+        .stdout(not(contains("outer-dep")));
+}
+
+// init creates in cwd, no walk-up
+fn init_creates_in_cwd_not_parent() {
+    let project = tempdir();
+    let sub = project.path().join("sub");
+    fs::create_dir(&sub);
+    // No Agentfile in project root
+
+    cmd(home).current_dir(&sub).args(["init", "--no-interactive"])
+        .assert().success();
+
+    assert!(sub.join("Agentfile").exists());           // created here
+    assert!(!project.path().join("Agentfile").exists()); // not in parent
+}
+
+// init -g creates in ~/.agix/
+fn init_global_creates_in_home_agix() {
+    let home = tempdir();
+    let cwd = tempdir();
+    cmd(home.path()).current_dir(cwd.path()).args(["init", "-g", "--no-interactive"])
+        .assert().success();
+    assert!(home.path().join(".agix").join("Agentfile").exists());
+}
+```
+
+### Existing tests to update
+
+All integration tests passing `--scope local` or `--scope global` must be migrated:
+- Remove `--scope local` (now default via walk-up)
+- Replace `--scope global` with `-g`
+- Ensure test setup places cwd at the directory containing the test Agentfile (so walk-up resolves correctly)
+
+Affected files: `add_test.rs`, `install_test.rs`, `remove_test.rs`, `update_test.rs`, `list_test.rs`, `outdated_test.rs`, `export_roundtrip_test.rs`.

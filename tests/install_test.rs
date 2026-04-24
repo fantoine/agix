@@ -499,7 +499,8 @@ shared = {{ source = "local:{}", exclude = ["codex"] }}
 // ---------------------------------------------------------------------------
 
 #[test]
-fn step9_install_without_agentfile_exits_nonzero() {
+fn step9_install_without_local_agentfile_falls_back_to_global() {
+    // Walk-up finds no Agentfile → fallback to ~/.agix/ (auto-created, no deps).
     let cwd = tempdir().unwrap();
     let home = tempdir().unwrap();
 
@@ -507,7 +508,9 @@ fn step9_install_without_agentfile_exits_nonzero() {
         .current_dir(cwd.path())
         .arg("install")
         .assert()
-        .failure();
+        .success();
+
+    assert!(home.path().join(".agix").join("Agentfile").exists());
 }
 
 // ---------------------------------------------------------------------------

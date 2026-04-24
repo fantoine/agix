@@ -1,4 +1,3 @@
-use agix::drivers::Scope;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
@@ -16,30 +15,25 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     Init {
-        #[arg(long, default_value = "local")]
-        scope: Scope,
+        #[arg(short = 'g', long)]
+        global: bool,
         /// Pre-select CLIs (skips the interactive menu). Repeatable.
         #[arg(long, num_args = 1..)]
         cli: Vec<String>,
-        /// Skip the interactive menu entirely. Equivalent to setting the
-        /// AGIX_NO_INTERACTIVE=1 environment variable, which also applies to
-        /// other commands that may prompt (e.g. `add --scope global` on first
-        /// use). Agix also auto-enables non-interactive mode when stderr is
-        /// not a TTY (piped/CI runs).
         #[arg(long)]
         no_interactive: bool,
     },
     Install {
-        #[arg(long, default_value = "local")]
-        scope: Scope,
+        #[arg(short = 'g', long)]
+        global: bool,
     },
     Add {
         /// Source type: local | github | git | marketplace
         source_type: String,
         /// Source value (path, org/repo, URL, <org/repo>@<plugin>, ...)
         source_value: String,
-        #[arg(long, default_value = "local")]
-        scope: Scope,
+        #[arg(short = 'g', long)]
+        global: bool,
         #[arg(long, num_args = 1..)]
         cli: Vec<String>,
         #[arg(long)]
@@ -47,29 +41,29 @@ enum Commands {
     },
     Remove {
         name: String,
-        #[arg(long, default_value = "local")]
-        scope: Scope,
+        #[arg(short = 'g', long)]
+        global: bool,
         #[arg(long, num_args = 1..)]
         cli: Vec<String>,
     },
     Update {
         name: Option<String>,
-        #[arg(long, default_value = "local")]
-        scope: Scope,
+        #[arg(short = 'g', long)]
+        global: bool,
     },
     List {
-        #[arg(long, default_value = "local")]
-        scope: Scope,
+        #[arg(short = 'g', long)]
+        global: bool,
     },
     Outdated {
-        #[arg(long, default_value = "local")]
-        scope: Scope,
+        #[arg(short = 'g', long)]
+        global: bool,
     },
     Check,
     Doctor,
     Export {
-        #[arg(long, default_value = "local")]
-        scope: Scope,
+        #[arg(short = 'g', long)]
+        global: bool,
         #[arg(long)]
         all: bool,
         #[arg(long)]
@@ -82,28 +76,30 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Commands::Init {
-            scope,
+            global,
             cli,
             no_interactive,
-        } => agix::commands::init::run(scope, cli, no_interactive).await,
-        Commands::Install { scope } => agix::commands::install::run(scope).await,
+        } => agix::commands::init::run(global, cli, no_interactive).await,
+        Commands::Install { global } => agix::commands::install::run(global).await,
         Commands::Add {
             source_type,
             source_value,
-            scope,
+            global,
             cli,
             version,
-        } => agix::commands::add::run(source_type, source_value, scope, cli, version).await,
-        Commands::Remove { name, scope, cli } => {
-            agix::commands::remove::run(name, scope, cli).await
+        } => agix::commands::add::run(source_type, source_value, global, cli, version).await,
+        Commands::Remove { name, global, cli } => {
+            agix::commands::remove::run(name, global, cli).await
         }
-        Commands::Update { name, scope } => agix::commands::update::run(name, scope).await,
-        Commands::List { scope } => agix::commands::list::run(scope).await,
-        Commands::Outdated { scope } => agix::commands::outdated::run(scope).await,
+        Commands::Update { name, global } => agix::commands::update::run(name, global).await,
+        Commands::List { global } => agix::commands::list::run(global).await,
+        Commands::Outdated { global } => agix::commands::outdated::run(global).await,
         Commands::Check => agix::commands::check::run().await,
         Commands::Doctor => agix::commands::doctor::run().await,
-        Commands::Export { scope, all, output } => {
-            agix::commands::export::run(scope, all, output).await
-        }
+        Commands::Export {
+            global,
+            all,
+            output,
+        } => agix::commands::export::run(global, all, output).await,
     }
 }

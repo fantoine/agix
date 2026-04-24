@@ -302,8 +302,7 @@ fn step10_add_marketplace_global_scope_auto_inits_non_interactively() {
             "add",
             "marketplace",
             "fantoine/claude-plugins@roundtable",
-            "--scope",
-            "global",
+            "-g",
         ])
         .assert()
         .success();
@@ -322,7 +321,8 @@ fn step10_add_marketplace_global_scope_auto_inits_non_interactively() {
 // ---------- Step 11: add without Agentfile → actionable error mentioning `agix init` ----------
 
 #[test]
-fn step11_add_without_agentfile_errors_mentioning_init() {
+fn step11_add_without_local_agentfile_falls_back_to_global() {
+    // Walk-up finds no Agentfile → fallback to ~/.agix/ (auto-created).
     let cwd = tempdir().unwrap();
     let home = tempdir().unwrap();
     let pkg = tempdir().unwrap();
@@ -334,9 +334,9 @@ fn step11_add_without_agentfile_errors_mentioning_init() {
         .arg("local")
         .arg(pkg.path())
         .assert()
-        .failure()
-        .stderr(predicates::str::contains("Agentfile"))
-        .stderr(predicates::str::contains("agix init"));
+        .success();
+
+    assert!(home.path().join(".agix").join("Agentfile").exists());
 }
 
 // ---------- Step 12: add ftp nope → error listing known schemes ----------
@@ -642,8 +642,7 @@ fn regression_global_auto_init_honors_non_interactive_env_var() {
             "add",
             "marketplace",
             "fantoine/claude-plugins@roundtable",
-            "--scope",
-            "global",
+            "-g",
         ])
         .assert()
         .success();

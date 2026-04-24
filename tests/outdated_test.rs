@@ -10,7 +10,9 @@ mod helpers;
 // ---------------------------------------------------------------------------
 
 #[test]
-fn step5_outdated_without_agentfile_exits_non_zero() {
+fn step5_outdated_without_agentfile_falls_back_to_global_then_fails_on_lock() {
+    // Walk-up finds no Agentfile → fallback to ~/.agix/ (auto-created).
+    // No lock file → fail with actionable "agix install" hint.
     let cwd = tempdir().unwrap();
     let home = tempdir().unwrap();
 
@@ -19,8 +21,8 @@ fn step5_outdated_without_agentfile_exits_non_zero() {
         .arg("outdated")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("no Agentfile"))
-        .stderr(predicate::str::contains("agix init"));
+        .stderr(predicate::str::contains("no lock file"))
+        .stderr(predicate::str::contains("agix install"));
 }
 
 // ---------------------------------------------------------------------------

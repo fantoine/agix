@@ -1,12 +1,16 @@
-use crate::drivers::Scope;
 use crate::error::AgixError;
 
-pub async fn run(name: Option<String>, scope: Scope) -> anyhow::Result<()> {
-    let (agentfile_path, lock_path, scope) = super::agentfile_paths(scope, false)?;
+pub async fn run(name: Option<String>, global: bool) -> anyhow::Result<()> {
+    let cwd = std::env::current_dir()?;
+    let (agentfile_path, lock_path, resolved) = super::agentfile_paths(global, &cwd, false)?;
+    if let super::ResolvedScope::Project(ref root) = resolved {
+        std::env::set_current_dir(root)?;
+    }
     if !agentfile_path.exists() {
         anyhow::bail!("No Agentfile found.");
     }
     let manifest = crate::manifest::agentfile::ProjectManifest::from_file(&agentfile_path)?;
+    let scope = resolved.to_scope();
 
     if let Some(pkg_name) = name {
         // Update-specific: confirm the package is declared in the manifest

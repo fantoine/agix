@@ -1,8 +1,11 @@
-use crate::drivers::Scope;
 use crate::error::AgixError;
 
-pub async fn run(name: String, scope: Scope, cli_filter: Vec<String>) -> anyhow::Result<()> {
-    let (agentfile_path, lock_path, _scope) = super::agentfile_paths(scope, false)?;
+pub async fn run(name: String, global: bool, cli_filter: Vec<String>) -> anyhow::Result<()> {
+    let cwd = std::env::current_dir()?;
+    let (agentfile_path, lock_path, resolved) = super::agentfile_paths(global, &cwd, false)?;
+    if let super::ResolvedScope::Project(ref root) = resolved {
+        std::env::set_current_dir(root)?;
+    }
     let mut manifest = crate::manifest::agentfile::ProjectManifest::from_file(&agentfile_path)?;
 
     // Design note: `remove` is intentionally lenient about `--cli` values

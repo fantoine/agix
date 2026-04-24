@@ -4,7 +4,6 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::constants::manifest::{AGENTFILE, AGENTFILE_LOCK};
-use crate::drivers::Scope;
 use crate::manifest::agentfile::{Dependency, ProjectManifest};
 use crate::sources::SourceBox;
 
@@ -19,15 +18,19 @@ use crate::sources::SourceBox;
 ///
 /// Unzipping the archive and running `agix install` in the extracted directory
 /// must succeed — nothing should point to the source machine's filesystem.
-pub async fn run(scope: Scope, all: bool, output: Option<String>) -> Result<()> {
+pub async fn run(global: bool, all: bool, output: Option<String>) -> Result<()> {
     if all {
-        // Deferred for v0.1.0: combining local + global scopes into a single
-        // zip needs a cross-scope layout (e.g. `local/` + `global/` subtrees)
-        // and a matching re-install flow. See Task 17 findings log.
         bail!("--all is not yet implemented — export one scope at a time");
     }
 
-    let (agentfile_path, lock_path, _scope) = super::agentfile_paths_no_autoinit(scope)?;
+    let cwd = std::env::current_dir()?;
+    let (agentfile_path, lock_path, resolved) = super::agentfile_paths(global, &cwd, false)?;
+    if let super::ResolvedScope::Project(ref root) = resolved {
+        std::env::set_current_dir(root)?;
+    }
+    let is_global = matches!(resolved, super::ResolvedScope::Global);
+    crate::output::scope_header(&agentfile_path, is_global);
+
     if !agentfile_path.exists() {
         bail!(
             "no Agentfile at {} — run `agix init` first",
