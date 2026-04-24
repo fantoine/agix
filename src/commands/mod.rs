@@ -85,7 +85,7 @@ fn ensure_global_agentfile(af: &Path, non_interactive: bool) -> anyhow::Result<(
         ensure_global_dir(af)?;
         crate::output::info("No global Agentfile — running first-time setup");
         let picks = crate::ui::prompt::pick_clis(&[], non_interactive)?;
-        crate::manifest::agentfile::ProjectManifest::empty(picks).to_file(&af)?;
+        crate::manifest::agentfile::ProjectManifest::empty(picks).to_file(af)?;
     }
     Ok(())
 }
@@ -110,8 +110,10 @@ pub fn agentfile_paths_no_autoinit(
 }
 
 /// Walk-up resolution for all commands except `init`.
+///
 /// - `global=true` → force ~/.agix/
 /// - `global=false` → walk up from cwd to $HOME; fallback to ~/.agix/
+///
 /// Auto-creates the global Agentfile on first use (interactive CLI pick).
 pub fn agentfile_paths(
     global: bool,
