@@ -10,16 +10,18 @@ mod helpers;
 // ---------------------------------------------------------------------------
 
 #[test]
-fn step2_doctor_without_agentfile_warns_and_exits_zero() {
-    let cwd = tempdir().unwrap();
+fn step2_doctor_without_local_agentfile_falls_back_to_global() {
+    // Walk-up finds no Agentfile → fallback to ~/.agix/ (auto-created).
     let home = tempdir().unwrap();
+    let cwd = tempdir().unwrap();
 
     helpers::cmd_non_interactive(home.path())
         .current_dir(cwd.path())
         .arg("doctor")
         .assert()
-        .success()
-        .stderr(predicate::str::contains("No Agentfile"));
+        .success();
+
+    assert!(home.path().join(".agix").join("Agentfile").exists());
 }
 
 #[test]

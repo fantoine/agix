@@ -277,7 +277,7 @@ fn step9_add_marketplace_local_scope_invokes_claude_shim() {
     assert!(!log.contains("plugin install roundtable@fantoine/claude-plugins"));
 }
 
-// ---------- Step 10: add marketplace --scope global with fresh HOME ----------
+// ---------- Step 10: add marketplace -g with fresh HOME ----------
 
 #[test]
 fn step10_add_marketplace_global_scope_auto_inits_non_interactively() {

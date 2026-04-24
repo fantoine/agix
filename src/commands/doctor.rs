@@ -1,14 +1,15 @@
-use crate::constants::manifest::{AGENTFILE, AGENTFILE_LOCK};
-
-pub async fn run() -> anyhow::Result<()> {
-    let dir = std::env::current_dir()?;
-    let agentfile_path = dir.join(AGENTFILE);
-    let lock_path = dir.join(AGENTFILE_LOCK);
+pub async fn run(global: bool) -> anyhow::Result<()> {
+    let cwd = std::env::current_dir()?;
+    let (agentfile_path, lock_path, resolved) = super::agentfile_paths(global, &cwd, false)?;
+    crate::output::scope_header(
+        &agentfile_path,
+        matches!(resolved, super::ResolvedScope::Global),
+    );
 
     println!("Agix Doctor\n");
 
     if !agentfile_path.exists() {
-        crate::output::warn("No Agentfile in current directory");
+        crate::output::warn("No Agentfile found — run `agix init` first");
         return Ok(());
     }
 
@@ -23,6 +24,7 @@ pub async fn run() -> anyhow::Result<()> {
     }
     crate::output::success("Agentfile: valid");
 
+    let project_dir = agentfile_path.parent().unwrap_or(&cwd);
     crate::output::info("CLI drivers:");
     for driver in crate::drivers::all_drivers() {
         let global = if driver.detect() {
@@ -30,7 +32,7 @@ pub async fn run() -> anyhow::Result<()> {
         } else {
             "not detected"
         };
-        let local = match driver.detect_local_config(&dir) {
+        let local = match driver.detect_local_config(project_dir) {
             Some(p) => format!("local config at {}", p.display()),
             None => "no local config".to_string(),
         };

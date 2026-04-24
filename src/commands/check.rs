@@ -1,9 +1,9 @@
-use crate::constants::manifest::AGENTFILE;
-
 pub async fn run() -> anyhow::Result<()> {
-    let path = std::env::current_dir()?.join(AGENTFILE);
+    let cwd = std::env::current_dir()?;
+    let path = super::agentfile_path_walk_up_only(&cwd)
+        .ok_or_else(|| anyhow::anyhow!("No Agentfile found — run `agix init` first."))?;
     if !path.exists() {
-        anyhow::bail!("No Agentfile found in current directory.");
+        anyhow::bail!("No Agentfile found — run `agix init` first.");
     }
 
     let manifest = crate::manifest::agentfile::ProjectManifest::from_file(&path)?;

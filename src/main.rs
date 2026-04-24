@@ -60,7 +60,10 @@ enum Commands {
         global: bool,
     },
     Check,
-    Doctor,
+    Doctor {
+        #[arg(short = 'g', long)]
+        global: bool,
+    },
     Export {
         #[arg(short = 'g', long)]
         global: bool,
@@ -95,7 +98,7 @@ async fn main() -> Result<()> {
         Commands::List { global } => agix::commands::list::run(global).await,
         Commands::Outdated { global } => agix::commands::outdated::run(global).await,
         Commands::Check => agix::commands::check::run().await,
-        Commands::Doctor => agix::commands::doctor::run().await,
+        Commands::Doctor { global } => agix::commands::doctor::run(global).await,
         Commands::Export {
             global,
             all,

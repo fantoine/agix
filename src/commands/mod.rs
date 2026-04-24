@@ -55,6 +55,14 @@ fn find_project_root(start: &Path, home: &Path) -> Option<PathBuf> {
     None
 }
 
+/// Walk-up only, no global fallback. Returns the Agentfile path if found, or
+/// None. Used by commands that must validate a specific project Agentfile
+/// (e.g. `check`) and must not silently switch to the global scope.
+pub fn agentfile_path_walk_up_only(cwd: &Path) -> Option<PathBuf> {
+    let home = dirs::home_dir()?;
+    find_project_root(cwd, &home).map(|root| root.join(AGENTFILE))
+}
+
 /// Return the `~/.agix/` paths without creating the directory.
 fn global_paths() -> anyhow::Result<(PathBuf, PathBuf)> {
     let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("no home directory"))?;

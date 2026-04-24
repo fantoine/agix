@@ -12,8 +12,8 @@ pub async fn run(global: bool) -> anyhow::Result<()> {
     );
 
     // Step 6: no Agentfile — exit non-zero with an actionable message.
-    // `agentfile_paths` auto-creates the file for `--scope global` (first-time
-    // setup), so this check only fires for local scope.
+    // `agentfile_paths` auto-creates the file on global fallback (first-time
+    // setup), so this check only fires when a project Agentfile is missing.
     if !agentfile_path.exists() {
         anyhow::bail!(
             "no Agentfile at {} — run `agix init` first",

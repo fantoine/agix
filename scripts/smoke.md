@@ -35,7 +35,7 @@ script itself.
 - [ ] `agix update` — all-deps refresh with multiple packages
 - [ ] `agix add … --cli claude --cli codex` — writes to each `[<cli>.dependencies]`
 - [ ] `agix remove … --cli claude` — partial filter
-- [ ] `--scope global` — HOME isolation is already wired
+- [x] `-g/--global` — walk-up scope + global flag (walk-up from subdir, `-g init`, `-g add`, `-g list`, precedence, `--scope` rejected)
 
 ### Error paths (exit code ≠ 0)
 - [ ] `agix check` in a dir without `Agentfile` — actionable error
