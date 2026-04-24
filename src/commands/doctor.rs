@@ -25,6 +25,7 @@ pub async fn run(global: bool) -> anyhow::Result<()> {
     crate::output::success("Agentfile: valid");
 
     let project_dir = agentfile_path.parent().unwrap_or(&cwd);
+    println!();
     crate::output::info("CLI drivers:");
     for driver in crate::drivers::all_drivers() {
         let global = if driver.detect() {
@@ -42,6 +43,7 @@ pub async fn run(global: bool) -> anyhow::Result<()> {
     // Git support: libgit2 is statically linked (always available); the git
     // CLI is optional and purely informational.
     let git = crate::sources::git::detect_git_support();
+    println!();
     crate::output::info("Git support:");
     println!("  - libgit2: {}", git.libgit2_version);
     println!(
@@ -57,24 +59,22 @@ pub async fn run(global: bool) -> anyhow::Result<()> {
     // presence, so we report the absence and point at `agix install` rather
     // than silently running the (no-op) loop and printing a false
     // "all present" line.
+    println!();
+    crate::output::info("Dependencies:");
     if !lock_path.exists() {
-        crate::output::info(&format!(
-            "no lock file at {} — run `agix install`",
-            lock_path.display()
-        ));
+        println!("  no lock file — run `agix install`");
         return Ok(());
     }
 
     let lock = crate::core::lock::LockFile::from_file_or_default(&lock_path);
+    if lock.packages.is_empty() {
+        println!("  no dependencies installed");
+        return Ok(());
+    }
+
     let mut missing = 0usize;
     let mut tracked_pkgs = 0usize;
     for pkg in &lock.packages {
-        // Marketplace packages don't track files (the CLI owns its plugin
-        // dir). Label them distinctly so the user knows doctor can't verify
-        // their on-disk state — claiming "all files present" for a package
-        // whose files we never tracked would be misleading. Active
-        // cross-checks against `claude plugin list` are deferred (see
-        // findings log).
         if pkg.source.as_marketplace().is_some() {
             let driver = pkg
                 .cli
@@ -98,9 +98,6 @@ pub async fn run(global: bool) -> anyhow::Result<()> {
     }
 
     if tracked_pkgs == 0 {
-        // Either the lock is empty or all entries were marketplace — either
-        // way there's nothing we can verify on disk. Stay quiet rather than
-        // print a green "all present" that doesn't reflect any real check.
         return Ok(());
     }
 
