@@ -6,51 +6,93 @@ agix is a **universal package manager for AI agent skills/plugins**, designed to
 
 ---
 
-## Comparison table
+## Primary competitors
 
-| Feature | **agix** | **skills (Vercel)** | **gh skill** | **mise / asdf** | **pip / npm / cargo** |
-|---------|----------|---------------------|--------------|------------------|-----------------------|
-| **Primary purpose** | AI skill/plugin manager (multi-CLI) | AI skill registry + install (Vercel SDK) | Copilot skill install (GitHub-only) | Developer tool version manager | Language package manager |
-| **Multi-CLI support** | ✅ Claude, Codex, Cursor, Windsurf, Gemini, Vibe… | ❌ Vercel AI SDK only | ❌ GitHub Copilot only | ❌ Dev tools, not AI agents | ❌ Single ecosystem |
-| **Agentfile manifest** | ✅ TOML, per-project + global | ❌ | ❌ | ✅ `.mise.toml` | ✅ `package.json` / `Cargo.toml` |
-| **Lock file** | ✅ `Agentfile.lock` | ❌ | ❌ | ✅ | ✅ |
-| **Local + global scopes** | ✅ walk-up + `~/.agix/` | ❌ | ❌ | ✅ | ⚠️ user vs project |
-| **Scope walk-up resolution** | ✅ cwd → parent → `$HOME` | ❌ | ❌ | ❌ | ❌ |
-| **Export / portability** | ✅ `agix export` (zip, `--all`) | ❌ | ❌ | ❌ | ⚠️ tarball only |
-| **Multiple sources** | ✅ local, git, github, marketplace | ⚠️ registry only | ⚠️ GitHub only | ✅ | ✅ |
-| **CLI-specific file install** | ✅ (roadmap: rules, MCP, hooks…) | ❌ | ❌ | ❌ | ❌ |
-| **Convention-based install** | ✅ (roadmap) | ❌ | ❌ | ❌ | ❌ |
-| **MCP server install** | ✅ (roadmap) | ❌ | ❌ | ❌ | ❌ |
-| **Marketplace integration** | ✅ (Claude marketplace via CLI) | ⚠️ own registry | ❌ | ❌ | ✅ |
-| **`doctor` / health check** | ✅ | ❌ | ❌ | ⚠️ | ❌ |
-| **`outdated` check** | ✅ | ❌ | ❌ | ✅ | ✅ |
-| **AI-agent aware** | ✅ (designed for it) | ✅ (Vercel AI) | ✅ (Copilot) | ❌ | ❌ |
-| **Open source** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Language** | Rust | TypeScript | Go | Rust | varies |
+### AGPM (ex-CCPM) — Concurrent frontal #1
+
+- **Repo:** https://github.com/aig787/agpm (ex https://github.com/aig787/ccpm)
+- **Language:** Rust (99.8%), MIT
+- **History:** Published as `ccpm` (Claude Code Package Manager) on crates.io, renamed `agpm` (Agentic Package Manager) autumn 2025. v0.4.14 (Dec 2025), ~25 releases.
+- **Manifest:** `agpm.toml` (TOML, per-type keys: agents/snippets/commands/skills…, `[sources]` section)
+- **Lock file:** ✅ Cargo-style lockfile
+- **Sources:** Git-based (GitHub, git URLs)
+- **Resource types:** agents, snippets, commands, scripts, hooks, MCP servers
+- **Multi-CLI:** ❌ Claude Code only
+- **Scopes:** local vs global (`~/.claude`)
+- **Export:** ❌ not documented
+- **Adoption:** ~1 star, ~1 fork — technically mature, near-zero adoption
+
+### MCS (Managed Claude Stack) — Concurrent frontal #2
+
+- **Site:** https://mcs-cli.dev
+- **Manifest:** `techpack.yaml` (concept "tech pack" = bundle declaratif multi-types)
+- **Resource types:** MCP servers, plugins, hooks, skills, commands, agents, settings
+- **Lock file:** ❓ not confirmed
+- **Doctor:** ✅ health checks intégrés
+- **Hooks/lifecycle:** ✅ event-based automation mentionné
+- **Multi-CLI:** ❓ Claude-centric a priori
+- **Export:** ❓ not documented
+- **Adoption:** inconnu
+
+### skills (vercel-labs) — Overlap partiel, non-concurrent direct
+
+- **Repo:** https://github.com/vercel-labs/skills
+- **Language:** TypeScript/Node, MIT
+- **Purpose:** installer/retirer des "Agent Skills" (dossiers `SKILL.md` + frontmatter YAML) dans 45+ coding agents
+- **Manifest:** ❌ pas d'Agentfile/manifeste projet déclaratif
+- **Lock file:** ❌ pas de lockfile dédié avec SHA figés
+- **Sources:** GitHub (`owner/repo`), URL git/GitLab, chemin local
+- **Resource types:** skills uniquement (pas agents/hooks/MCP comme types distincts)
+- **Multi-CLI:** ✅ 45+ agents mappés (Claude Code, Codex, Cursor, Windsurf, Goose, Copilot, Cline…)
+- **Install model:** symlinks vers copie canonique (fallback `--copy`)
+- **Scopes:** `-g` (global) vs project
+- **Export:** ❌
+- **Verdict:** overlap sur l'action de base (`add SKILL.md dans .claude/skills/`), adresse des problèmes différents. Pas de reproductibilité, pas de multi-types.
 
 ---
 
-## Notes per competitor
+## Secondary / adjacent
 
-### skills (Vercel)
-Registry and install tool for Vercel AI SDK skills. Focused exclusively on the Vercel/Next.js AI ecosystem. Not a direct competitor — different target audience (web developers using Vercel AI SDK vs developers managing AI agent tooling). No multi-CLI concept, no lock file, no local/global scopes.
+| Tool | Type | Lock | Multi-CLI | Resource types | Notes |
+|------|------|------|-----------|----------------|-------|
+| **CraftDesk** (`mensfeld/craftdesk`) | Package manager | ✅ SHA-256 | ❓ | skills, agents | GitHub |
+| **AGR** (`computerlovetech/agr`) | Package manager | ⚠️ pinned commits | ✅ 6+ agents | skills (GitHub-based) | Python, `-g` flag |
+| **ccpi / tonsofskills** (`jeremylongshore`) | Marketplace CLI | ❌ | ✅ | 423 plugins / 2849 skills / 177 agents | Thin wrapper |
+| **mcpm.sh** | MCP manager | ❌ | ✅ multi-clients | MCP servers only | Unified config + smart router |
+| **Install-MCP** | MCP installer | ❌ | ✅ | MCP servers only | One-liner, très léger |
 
-### gh skill
-GitHub CLI extension (`gh skill install …`) for installing Copilot-compatible skills from GitHub repositories. Tightly coupled to GitHub Copilot. No universal manifest, no lock file, no lifecycle management. More of a convenience wrapper than a package manager.
+---
 
-### mise / asdf
-General-purpose developer tool version managers. Not AI-agent aware. No concept of skill install, MCP config, rules injection, etc. Comparable only on manifest + lock + version management mechanics — agix borrows the UX pattern but specialises it for AI tooling.
+## Feature comparison matrix
 
-### pip / npm / cargo
-Language-specific package managers. Manage code dependencies, not AI agent skills/config. Not competitors — agix is complementary (a skill package installed by agix may itself have npm dependencies).
+| Feature | **agix** | **AGPM** | **MCS** | **skills** | **AGR** |
+|---------|----------|----------|---------|------------|---------|
+| **Language** | Rust | Rust | ❓ | TypeScript | Python |
+| **Manifest** | `Agentfile` (TOML) | `agpm.toml` | `techpack.yaml` | ❌ | `agr.toml` |
+| **Lock file** | ✅ SHA-based | ✅ Cargo-style | ❓ | ❌ | ⚠️ pinned commits |
+| **Multi-CLI** | ✅ (roadmap: 11 drivers) | ❌ Claude only | ❓ | ✅ 45+ agents | ✅ 6+ agents |
+| **Walk-up scope** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Local + global scopes** | ✅ | ✅ | ❓ | ✅ `-g` | ✅ `-g` |
+| **Skills** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Agents** | ✅ | ✅ | ✅ | ❌ | ❌ |
+| **Commands** | ✅ | ✅ | ✅ | ❌ | ❌ |
+| **Hooks** | ✅ (Claude) | ✅ | ✅ | ❌ | ❌ |
+| **MCP servers** | ✅ (roadmap injection) | ✅ | ✅ | ❌ | ❌ |
+| **Rules / instructions** | 🗺 | ❌ | ❌ | ❌ | ❌ |
+| **Convention-based install** | 🗺 | ❌ | ❌ | ✅ (SKILL.md) | ❌ |
+| **Declarative + overrides** | 🗺 | ❌ | ❓ | ❌ | ❌ |
+| **Export / portability** | ✅ zip `--all` | ❌ | ❌ | ❌ | ❌ |
+| **Doctor / health checks** | ✅ | ❌ | ✅ | ❌ | ❌ |
+| **Marketplace** | ✅ (Claude) | ❌ | ❌ | ❌ | ❌ |
+| **`outdated` check** | ✅ | ❓ | ❌ | ❌ | ❌ |
 
 ---
 
 ## agix differentiators
 
-1. **Multi-CLI, single manifest** — one `Agentfile` works for Claude, Codex, Cursor, Windsurf, etc.
-2. **Rich install lifecycle** — not just file copy: MCP config injection, rules injection, hooks, instructions merge, with update/remove tracking.
-3. **Convention + declarative** — works out of the box for any skill package, configurable for complex cases.
-4. **Scope walk-up** — project-level resolution like `.gitignore` / `package.json` semantics.
-5. **Portability** — `export --all` snapshots both local and global state into a single zip for backup/migration.
-6. **Doctor** — active health checks, conflict detection on managed file fragments.
+1. **Multi-CLI, single manifest** — un `Agentfile` pour Claude, Codex, Cursor, Windsurf, etc. AGPM reste Claude-only.
+2. **Scope walk-up** — résolution projet-level comme `.gitignore`, aucun concurrent ne fait ça.
+3. **Export `--all`** — snapshot local + global dans un seul zip, seul agix implémente ça.
+4. **Convention + déclaratif + overrides** — install out-of-the-box sans Agentfile, configurable avec.
+5. **Rich file lifecycle** — MCP injection, rules, hooks, instructions merge avec tracking SHA + conflict detection.
+6. **Doctor étendu** — vérification active des mutations managed, aucun concurrent ne fait les deux (install + health check des fichiers managed).
