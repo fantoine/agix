@@ -37,17 +37,21 @@ agix is a **universal package manager for AI agent skills/plugins**, designed to
 ### skills (vercel-labs) — Overlap partiel, non-concurrent direct
 
 - **Repo:** https://github.com/vercel-labs/skills
+- **Docs:** https://mintlify.com/vercel-labs/skills
 - **Language:** TypeScript/Node, MIT
 - **Purpose:** installer/retirer des "Agent Skills" (dossiers `SKILL.md` + frontmatter YAML) dans 45+ coding agents
 - **Manifest:** ❌ pas d'Agentfile/manifeste projet déclaratif
-- **Lock file:** ❌ pas de lockfile dédié avec SHA figés
-- **Sources:** GitHub (`owner/repo`), URL git/GitLab, chemin local
+- **Lock file:** ✅ deux lock files (ajouté mars 2026)
+  - **Global:** `~/.agents/.skill-lock.json` (v3) — par skill: source, sourceType, sourceUrl, skillPath, `skillFolderHash` (GitHub Trees API SHA), installedAt, updatedAt
+  - **Local:** `./skills-lock.json` (v1) — à committer en VCS — par skill: source, sourceType, `computedHash` (SHA-256 des contenus de fichiers)
+- **Sources:** GitHub (`owner/repo`), git/GitLab URL, `node_modules`, chemin local
 - **Resource types:** skills uniquement (pas agents/hooks/MCP comme types distincts)
 - **Multi-CLI:** ✅ 45+ agents mappés (Claude Code, Codex, Cursor, Windsurf, Goose, Copilot, Cline…)
 - **Install model:** symlinks vers copie canonique (fallback `--copy`)
-- **Scopes:** `-g` (global) vs project
+- **Scopes:** `-g` (global `~/.agents/`) vs project
+- **Commands:** `add`, `list`/`ls`, `find`, `remove`/`rm`, `check`, `update`, `init`, `experimental_sync`
 - **Export:** ❌
-- **Verdict:** overlap sur l'action de base (`add SKILL.md dans .claude/skills/`), adresse des problèmes différents. Pas de reproductibilité, pas de multi-types.
+- **Verdict:** overlap sur l'action de base (`add SKILL.md dans .claude/skills/`), adresse des problèmes différents. Skills-only, pas de reproductibilité cross-types, pas de manifeste déclaratif projet.
 
 ---
 
@@ -69,7 +73,7 @@ agix is a **universal package manager for AI agent skills/plugins**, designed to
 |---------|----------|----------|---------|------------|---------|
 | **Language** | Rust | Rust | ❓ | TypeScript | Python |
 | **Manifest** | `Agentfile` (TOML) | `agpm.toml` | `techpack.yaml` | ❌ | `agr.toml` |
-| **Lock file** | ✅ SHA-based | ✅ Cargo-style | ❓ | ❌ | ⚠️ pinned commits |
+| **Lock file** | ✅ SHA-based | ✅ Cargo-style | ❓ | ✅ dual (global + local, mars 2026) | ⚠️ pinned commits |
 | **Multi-CLI** | ✅ (roadmap: 11 drivers) | ❌ Claude only | ❓ | ✅ 45+ agents | ✅ 6+ agents |
 | **Walk-up scope** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Local + global scopes** | ✅ | ✅ | ❓ | ✅ `-g` | ✅ `-g` |
