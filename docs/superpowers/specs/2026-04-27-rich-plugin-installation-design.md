@@ -10,31 +10,83 @@
 
 ---
 
-## 1. Declarative manifest
+## 1. Installation modes
 
-Each dependency in `Agentfile` can declare what to install per CLI:
+agix supports two complementary modes, composable per CLI:
+
+### 1a. Convention-based (default)
+
+agix scans the downloaded package for known directory/file layouts and installs them automatically. No `Agentfile` required in the package.
+
+| Convention dir | Installed to | Drivers |
+|----------------|-------------|---------|
+| `skills/` | driver skills dir | `claude`, `vibe`, `goose` |
+| `commands/` | `~/.claude/commands/` | `claude` |
+| `rules/` | rules file / dir | `claude`, `cursor`, `windsurf`, `cline`, `amp` |
+| `agents/` | agents dir | `codex`, `opencode` |
+| `prompts/` | `~/.vibe/prompts/` | `vibe` |
+| `mcp/*.json` | MCP config | all drivers |
+| `hooks/` | `~/.claude/hooks/` | `claude` |
+| `CLAUDE.md` | marker inject → `~/.claude/CLAUDE.md` | `claude` |
+| `AGENTS.md` | marker inject → project `AGENTS.md` | `codex`, `opencode`, `windsurf`, `goose` |
+| `GEMINI.md` | marker inject → `~/.gemini/GEMINI.md` | `gemini` |
+
+Convention scan runs when: (a) package has no `Agentfile`, OR (b) package has `Agentfile` with no `[install.<driver>]` for this driver.
+
+### 1b. Declarative (Agentfile `[install.cli]`)
+
+When `[install.<driver>]` is present, conventions still apply **unless overridden or disabled**. The table enriches or replaces convention entries.
 
 ```toml
 [dependencies.my-skill]
 source = "github:org/repo@main"
 
-[dependencies.my-skill.install.claude]
-commands   = ["commands/my-command.md"]
-rules      = ["rules/my-rules.md"]
-mcp        = ["mcp/my-server.json"]
-hooks      = ["hooks/pre-tool-use.sh"]
-claude_md  = ["fragments/CLAUDE.md"]
+# Convention scan runs (skills/, commands/, rules/, mcp/ etc.)
+# Nothing extra needed for basic installs.
 
-[dependencies.my-skill.install.windsurf]
-rules      = ["rules/windsurf.md"]  # → .windsurfrules
-mcp        = ["mcp/windsurf-mcp.json"]
+[dependencies.my-skill.install.claude]
+# Key present = override that convention's source path:
+skills   = "my-skills/"          # scan my-skills/ instead of skills/
+commands = "tools/commands/"     # scan tools/commands/ instead of commands/
+rules    = ["rules/claude.md"]   # explicit file list instead of dir scan
+
+# Non-conventional elements (always explicit):
+mcp       = "config/mcp.json"
+claude_md = "docs/fragment.md"
+hooks     = ["hooks/pre.sh", "hooks/post.sh"]
+
+# Disable all conventions for this driver, only install what's listed:
+mode = "explicit"
+
+# OR: keep conventions but suppress specific items:
+exclude = ["skills/", "CLAUDE.md"]
 
 [dependencies.my-skill.install.vibe]
-mcp        = ["mcp/vibe-mcp.json"]  # → ~/.vibe/config.toml [[mcp_servers]]
-skills_dir = ["skills/"]            # → ~/.vibe/skills/
+skills = "my-skills/"            # override source dir
+mcp    = "config/vibe-mcp.json"
+
+[dependencies.my-skill.install.windsurf]
+rules = ["rules/windsurf.md"]    # override → .windsurfrules
+mcp   = "mcp/windsurf-mcp.json"
 ```
 
-Absent `[install.cli]` table = no file installation for that CLI (backward compat).
+### 1c. Value forms for any key
+
+| Form | Meaning |
+|------|---------|
+| `"dir/"` (trailing slash) | Scan entire directory |
+| `"file.md"` | Single file |
+| `["a.md", "b.md"]` | Explicit file list |
+| `{ src = "path/", target_subdir = "sub/" }` | Override source dir + target subdirectory |
+
+### 1d. Resolution rules
+
+1. No `[install.<driver>]` → run convention scan only.
+2. `[install.<driver>]` present, no `mode` key → convention scan + listed extras; listed keys override their convention counterpart.
+3. `mode = "explicit"` → skip convention scan entirely; only install listed keys.
+4. `exclude = ["skills/"]` → convention scan minus listed items; listed keys still add/override.
+
+Absent `[install.cli]` table = conventions only (backward compat; packages without Agentfile work out of the box).
 
 ---
 
@@ -53,7 +105,26 @@ pub trait CliDriver {
 }
 ```
 
-`InstallSpec` = deserialized `[install.<cli>]` table for this driver.
+`InstallSpec` = resolved install config for one driver, after merging conventions + Agentfile overrides:
+
+```rust
+pub struct InstallSpec {
+    pub mode: InstallMode,        // Layered (default) | Explicit
+    pub exclude: Vec<String>,     // convention items to suppress
+    pub entries: Vec<InstallEntry>,
+}
+
+pub enum InstallMode { Layered, Explicit }
+
+pub struct InstallEntry {
+    pub kind: EntryKind,          // Skills | Commands | Rules | Mcp | Hooks | Fragment | ...
+    pub src: PathBuf,             // path inside the package
+    pub target_subdir: Option<String>, // override target subdirectory
+}
+```
+
+`InstallSpec::resolve(conventions: &DriverConventions, agentfile_table: Option<&Table>) -> InstallSpec`
+builds the merged spec: start from conventions, apply excludes, overlay explicit entries.
 
 Default implementation: no-op (drivers that don't support file install yet compile fine).
 
