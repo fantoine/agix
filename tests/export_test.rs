@@ -76,11 +76,7 @@ fn step4_export_all_produces_zip_with_both_scopes() {
     // Project dir nested inside home so walk-up boundary works.
     let project = home.path().join("project");
     std::fs::create_dir(&project).unwrap();
-    std::fs::write(
-        project.join("Agentfile"),
-        "[agix]\ncli = [\"claude\"]\n",
-    )
-    .unwrap();
+    std::fs::write(project.join("Agentfile"), "[agix]\ncli = [\"claude\"]\n").unwrap();
 
     // Bootstrap global Agentfile.
     let agix_dir = home.path().join(".agix");
