@@ -8,7 +8,7 @@ agix is a **universal package manager for AI agent skills/plugins**, designed to
 
 ## Primary competitors
 
-### AGPM (ex-CCPM) — Concurrent frontal #1
+### AGPM (ex-CCPM) — Direct competitor #1
 
 - **Repo:** https://github.com/aig787/agpm (ex https://github.com/aig787/ccpm)
 - **Language:** Rust (99.8%), MIT
@@ -22,36 +22,36 @@ agix is a **universal package manager for AI agent skills/plugins**, designed to
 - **Export:** ❌ not documented
 - **Adoption:** ~1 star, ~1 fork — technically mature, near-zero adoption
 
-### MCS (Managed Claude Stack) — Concurrent frontal #2
+### MCS (Managed Claude Stack) — Direct competitor #2
 
 - **Site:** https://mcs-cli.dev
-- **Manifest:** `techpack.yaml` (concept "tech pack" = bundle declaratif multi-types)
+- **Manifest:** `techpack.yaml` (concept of a "tech pack" = declarative multi-resource bundle)
 - **Resource types:** MCP servers, plugins, hooks, skills, commands, agents, settings
 - **Lock file:** ❓ not confirmed
-- **Doctor:** ✅ health checks intégrés
-- **Hooks/lifecycle:** ✅ event-based automation mentionné
-- **Multi-CLI:** ❓ Claude-centric a priori
+- **Doctor:** ✅ built-in health checks
+- **Hooks/lifecycle:** ✅ event-based automation referenced
+- **Multi-CLI:** ❓ Claude-centric on first read
 - **Export:** ❓ not documented
-- **Adoption:** inconnu
+- **Adoption:** unknown
 
-### skills (vercel-labs) — Overlap partiel, non-concurrent direct
+### skills (vercel-labs) — Partial overlap, not a direct competitor
 
 - **Repo:** https://github.com/vercel-labs/skills
 - **Docs:** https://mintlify.com/vercel-labs/skills
 - **Language:** TypeScript/Node, MIT
-- **Purpose:** installer/retirer des "Agent Skills" (dossiers `SKILL.md` + frontmatter YAML) dans 45+ coding agents
-- **Manifest:** ❌ pas d'Agentfile/manifeste projet déclaratif
-- **Lock file:** ✅ deux lock files (ajouté mars 2026)
-  - **Global:** `~/.agents/.skill-lock.json` (v3) — par skill: source, sourceType, sourceUrl, skillPath, `skillFolderHash` (GitHub Trees API SHA), installedAt, updatedAt
-  - **Local:** `./skills-lock.json` (v1) — à committer en VCS — par skill: source, sourceType, `computedHash` (SHA-256 des contenus de fichiers)
-- **Sources:** GitHub (`owner/repo`), git/GitLab URL, `node_modules`, chemin local
-- **Resource types:** skills uniquement (pas agents/hooks/MCP comme types distincts)
-- **Multi-CLI:** ✅ 45+ agents mappés (Claude Code, Codex, Cursor, Windsurf, Goose, Copilot, Cline…)
-- **Install model:** symlinks vers copie canonique (fallback `--copy`)
+- **Purpose:** install/remove "Agent Skills" (folders containing a `SKILL.md` with YAML frontmatter) into 45+ coding agents
+- **Manifest:** ❌ no `Agentfile`-style declarative project manifest
+- **Lock file:** ✅ two lock files (added March 2026)
+  - **Global:** `~/.agents/.skill-lock.json` (v3) — per skill: source, sourceType, sourceUrl, skillPath, `skillFolderHash` (GitHub Trees API SHA), installedAt, updatedAt
+  - **Local:** `./skills-lock.json` (v1) — meant to be committed to VCS — per skill: source, sourceType, `computedHash` (SHA-256 of file contents)
+- **Sources:** GitHub (`owner/repo`), git/GitLab URL, `node_modules`, local path
+- **Resource types:** skills only (no agents/hooks/MCP as distinct types)
+- **Multi-CLI:** ✅ 45+ agents mapped (Claude Code, Codex, Cursor, Windsurf, Goose, Copilot, Cline…)
+- **Install model:** symlinks to a canonical copy (`--copy` fallback)
 - **Scopes:** `-g` (global `~/.agents/`) vs project
 - **Commands:** `add`, `list`/`ls`, `find`, `remove`/`rm`, `check`, `update`, `init`, `experimental_sync`
 - **Export:** ❌
-- **Verdict:** overlap sur l'action de base (`add SKILL.md dans .claude/skills/`), adresse des problèmes différents. Skills-only, pas de reproductibilité cross-types, pas de manifeste déclaratif projet.
+- **Verdict:** overlap on the base operation (`add SKILL.md to .claude/skills/`) but tackles a different problem. Skills-only, no cross-type reproducibility, no declarative project manifest.
 
 ---
 
@@ -63,7 +63,7 @@ agix is a **universal package manager for AI agent skills/plugins**, designed to
 | **AGR** (`computerlovetech/agr`) | Package manager | ⚠️ pinned commits | ✅ 6+ agents | skills (GitHub-based) | Python, `-g` flag |
 | **ccpi / tonsofskills** (`jeremylongshore`) | Marketplace CLI | ❌ | ✅ | 423 plugins / 2849 skills / 177 agents | Thin wrapper |
 | **mcpm.sh** | MCP manager | ❌ | ✅ multi-clients | MCP servers only | Unified config + smart router |
-| **Install-MCP** | MCP installer | ❌ | ✅ | MCP servers only | One-liner, très léger |
+| **Install-MCP** | MCP installer | ❌ | ✅ | MCP servers only | One-liner, very lightweight |
 
 ---
 
@@ -73,7 +73,7 @@ agix is a **universal package manager for AI agent skills/plugins**, designed to
 |---------|----------|----------|---------|------------|---------|
 | **Language** | Rust | Rust | ❓ | TypeScript | Python |
 | **Manifest** | `Agentfile` (TOML) | `agpm.toml` | `techpack.yaml` | ❌ | `agr.toml` |
-| **Lock file** | ✅ SHA-based | ✅ Cargo-style | ❓ | ✅ dual (global + local, mars 2026) | ⚠️ pinned commits |
+| **Lock file** | ✅ SHA-based | ✅ Cargo-style | ❓ | ✅ dual (global + local, March 2026) | ⚠️ pinned commits |
 | **Multi-CLI** | ✅ (roadmap: 11 drivers) | ❌ Claude only | ❓ | ✅ 45+ agents | ✅ 6+ agents |
 | **Walk-up scope** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Local + global scopes** | ✅ | ✅ | ❓ | ✅ `-g` | ✅ `-g` |
@@ -83,7 +83,7 @@ agix is a **universal package manager for AI agent skills/plugins**, designed to
 | **Hooks** | ✅ (Claude) | ✅ | ✅ | ❌ | ❌ |
 | **MCP servers** | ✅ (roadmap injection) | ✅ | ✅ | ❌ | ❌ |
 | **Rules / instructions** | 🗺 | ❌ | ❌ | ❌ | ❌ |
-| **Convention-based install** | 🗺 | ❌ | ❌ | ✅ (SKILL.md) | ❌ |
+| **Convention-based install** | ✅ | ❌ | ❌ | ✅ (SKILL.md) | ❌ |
 | **Declarative + overrides** | 🗺 | ❌ | ❓ | ❌ | ❌ |
 | **Export / portability** | ✅ zip `--all` | ❌ | ❌ | ❌ | ❌ |
 | **Doctor / health checks** | ✅ | ❌ | ✅ | ❌ | ❌ |
@@ -94,9 +94,9 @@ agix is a **universal package manager for AI agent skills/plugins**, designed to
 
 ## agix differentiators
 
-1. **Multi-CLI, single manifest** — un `Agentfile` pour Claude, Codex, Cursor, Windsurf, etc. AGPM reste Claude-only.
-2. **Scope walk-up** — résolution projet-level comme `.gitignore`, aucun concurrent ne fait ça.
-3. **Export `--all`** — snapshot local + global dans un seul zip, seul agix implémente ça.
-4. **Convention + déclaratif + overrides** — install out-of-the-box sans Agentfile, configurable avec.
-5. **Rich file lifecycle** — MCP injection, rules, hooks, instructions merge avec tracking SHA + conflict detection.
-6. **Doctor étendu** — vérification active des mutations managed, aucun concurrent ne fait les deux (install + health check des fichiers managed).
+1. **Multi-CLI, single manifest** — one `Agentfile` for Claude, Codex, Cursor, Windsurf, etc. AGPM stays Claude-only.
+2. **Walk-up scope resolution** — project-level lookup like `.gitignore`. No competitor does it.
+3. **Export `--all`** — local + global snapshot in a single zip. Only agix implements it.
+4. **Conventions + declarative + overrides** — works out of the box without an Agentfile, configurable when one is present, with per-key overrides.
+5. **Rich file lifecycle** — MCP injection, rules, hooks, instructions merge with SHA tracking + conflict detection.
+6. **Extended doctor** — active health checks on managed mutations. No competitor combines install + integrity verification on the fragments it has injected.

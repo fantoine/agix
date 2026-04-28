@@ -73,7 +73,7 @@ Legend: ✅ supported today · 🗺 roadmap · ❌ not applicable / unknown
 - **Agents:** `~/.vibe/agents/*.toml` (copy)
 
 ### Goose (`goose`)
-- **Config dir:** `~/.goose/` (probable — not fully documented)
+- **Config dir:** `~/.goose/` (likely — not fully documented)
 - **MCP:** extensions config (format TBD — likely YAML or JSON)
 - **Instructions merge:** `AGENTS.md` (marker injection)
 - **Skills:** `.agents/skills/` (agentskills.io standard)
